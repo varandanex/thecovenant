@@ -1,0 +1,3 @@
+# Ignore scraper outputs by default
+*.json
+!README.md

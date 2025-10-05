@@ -1,0 +1,15 @@
+{
+  "name": "thecovenant-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "scrape": "node scripts/scrape-thecovenant.mjs"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "cheerio": "^1.0.0-rc.12",
+    "fast-xml-parser": "^4.4.2",
+    "p-limit": "^4.0.0"
+  }
+}
