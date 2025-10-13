@@ -1,13 +1,14 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- **`scripts/`**: Node.js ESM utilities. `scrape-thecovenant.mjs` crawls www.thecovenant.es and `format-export.mjs` cleans the captured dataset.
+- **`scripts/`**: Node.js ESM utilities. `scrape-thecovenant.mjs` crawls www.thecovenant.es, `format-export.mjs` limpia el dataset capturado y `scrapefull.mjs` orquesta ambas tareas mostrando los exports generados.
 - **`data/`**: Raw and formatted exports (`thecovenant-export*.json`) plus scraped assets. Treated as build artefacts, never edited by hand.
 - **`tests/`**: Minimal runner (`extract.test.mjs`) and HTML fixtures used to validate extraction helpers.
 - **`README.md`**: Architectural vision for the forthcoming Next.js + Supabase stack; align scraper output with this roadmap.
 
 ## Build, Test & Development Commands
 - `npm run scrape`: Crawls the live site. Use environment overrides like `SCRAPE_START_URL` or `SCRAPE_MAX_PAGES` when staging.
+- `npm run scrapefull`: Ejecuta `scrape-thecovenant.mjs`, luego `format-export.mjs` y emite en consola los exports resultantes.
 - `npm run format-export`: Normalizes `data/thecovenant-export.json` into the formatted export; run after every scrape.
 - `npm test` / `npm run test:unit`: Executes `tests/extract.test.mjs`; exits non-zero on first failure to keep CI feedback tight.
 

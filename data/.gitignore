@@ -1,5 +1,7 @@
 # Ignore scraper outputs by default
 *.json
+*.ndjson
+exports/
 !README.md
 
 # Ignorar subcarpeta de imágenes descargadas

@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -6,6 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, '..');
 const INPUT_PATH = path.join(ROOT_DIR, 'data', 'thecovenant-export.json');
 const OUTPUT_PATH = path.join(ROOT_DIR, 'data', 'thecovenant-export-formatted.json');
+const DEFAULT_EXPORT_DIR = path.join(ROOT_DIR, 'data', 'exports');
 
 const WORDS_PER_MINUTE = 180;
 const STOP_HEADING_PATTERNS = [
@@ -19,6 +20,157 @@ const STOP_HEADING_PATTERNS = [
   'youtube',
   'twitch'
 ];
+
+async function ensureDir(dirPath) {
+  await mkdir(dirPath, { recursive: true });
+}
+
+async function ensureDirForFile(filePath) {
+  await ensureDir(path.dirname(filePath));
+}
+
+async function writeJsonFile(filePath, payload) {
+  await ensureDirForFile(filePath);
+  await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+}
+
+async function writeNdjsonFile(filePath, records) {
+  await ensureDirForFile(filePath);
+  if (!Array.isArray(records) || records.length === 0) {
+    await writeFile(filePath, '', 'utf8');
+    return;
+  }
+  const lines = records.map(record => JSON.stringify(record));
+  await writeFile(filePath, `${lines.join('\n')}\n`, 'utf8');
+}
+
+function envFlag(name, fallback = false) {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  const value = raw.toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(value)) return true;
+  if (['0', 'false', 'no', 'off'].includes(value)) return false;
+  return fallback;
+}
+
+function envNumber(name, fallback = null) {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const value = Number.parseInt(raw, 10);
+  return Number.isNaN(value) ? fallback : value;
+}
+
+function envList(name) {
+  const raw = process.env[name];
+  if (!raw) return null;
+  return raw
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean)
+    .map(item => item.toLowerCase());
+}
+
+function resolveOutDir(baseDir, target, fallback = DEFAULT_EXPORT_DIR) {
+  if (!target) return fallback;
+  return path.isAbsolute(target) ? target : path.resolve(baseDir, target);
+}
+
+function parseCliArgs(argv = []) {
+  const defaults = {
+    outDir: resolveOutDir(ROOT_DIR, process.env.SCRAPE_EXPORT_OUT_DIR, DEFAULT_EXPORT_DIR),
+    emitNdjson: envFlag('SCRAPE_EXPORT_NDJSON', false),
+    splitJson: envFlag('SCRAPE_EXPORT_SPLIT_JSON', false),
+    minWords: envNumber('SCRAPE_EXPORT_MIN_WORDS', 0) ?? 0,
+    includeTypes: (() => {
+      const list = envList('SCRAPE_EXPORT_TYPES');
+      return Array.isArray(list) && list.length ? new Set(list) : null;
+    })()
+  };
+
+  const options = { ...defaults };
+
+  const setTypes = value => {
+    if (!value) {
+      options.includeTypes = null;
+      return;
+    }
+    const items = value
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean)
+      .map(item => item.toLowerCase());
+    options.includeTypes = items.length ? new Set(items) : null;
+  };
+
+  const tokens = Array.from(argv ?? []);
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.startsWith('--out-dir=')) {
+      options.outDir = resolveOutDir(ROOT_DIR, token.split('=')[1]);
+      continue;
+    }
+    if (token === '--out-dir') {
+      const value = tokens[index + 1];
+      if (value && !value.startsWith('--')) {
+        options.outDir = resolveOutDir(ROOT_DIR, value);
+        index += 1;
+      }
+      continue;
+    }
+
+    if (token === '--ndjson') {
+      options.emitNdjson = true;
+      continue;
+    }
+    if (token === '--no-ndjson') {
+      options.emitNdjson = false;
+      continue;
+    }
+
+    if (token === '--split-json') {
+      options.splitJson = true;
+      continue;
+    }
+    if (token === '--no-split-json') {
+      options.splitJson = false;
+      continue;
+    }
+
+    if (token.startsWith('--min-words=')) {
+      const value = Number.parseInt(token.split('=')[1], 10);
+      if (!Number.isNaN(value)) options.minWords = value;
+      continue;
+    }
+    if (token === '--min-words') {
+      const value = Number.parseInt(tokens[index + 1], 10);
+      if (!Number.isNaN(value)) options.minWords = value;
+      if (tokens[index + 1] && !tokens[index + 1].startsWith('--')) index += 1;
+      continue;
+    }
+
+    if (token.startsWith('--types=')) {
+      setTypes(token.split('=')[1]);
+      continue;
+    }
+    if (token === '--types') {
+      const value = tokens[index + 1];
+      if (value && !value.startsWith('--')) {
+        setTypes(value);
+        index += 1;
+      } else {
+        setTypes('');
+      }
+      continue;
+    }
+  }
+
+  if (!options.outDir) {
+    options.outDir = DEFAULT_EXPORT_DIR;
+  }
+
+  return options;
+}
 
 function normalizeWhitespace(value) {
   if (typeof value !== 'string') return value ?? null;
@@ -78,6 +230,206 @@ function splitTextContent(text) {
     .split(/\n+/)
     .map(chunk => normalizeWhitespace(decodeEntities(chunk)))
     .filter(Boolean);
+}
+
+function extractPathPartsFromUrl(urlString) {
+  if (!urlString) return [];
+  try {
+    const parsed = new URL(urlString);
+    return parsed.pathname.split('/').filter(Boolean);
+  } catch {
+    return urlString.split('/').filter(Boolean);
+  }
+}
+
+function slugifySegment(segment) {
+  if (!segment) return null;
+  const cleaned = segment
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return cleaned || null;
+}
+
+function deriveSlugFromUrl(urlString) {
+  const parts = extractPathPartsFromUrl(urlString);
+  if (parts.length === 0) return 'home';
+  const explicit = slugifySegment(parts[parts.length - 1]);
+  if (explicit) return explicit;
+  const combined = parts
+    .map(part => slugifySegment(part))
+    .filter(Boolean)
+    .join('-');
+  return combined || 'page';
+}
+
+function buildPathFromParts(parts = []) {
+  if (!Array.isArray(parts) || parts.length === 0) return '/';
+  return `/${parts.join('/')}`;
+}
+
+function collectJsonLdTypes(jsonLd = []) {
+  const types = new Set();
+  for (const entry of jsonLd) {
+    const rawType = entry?.type;
+    if (!rawType) continue;
+    String(rawType)
+      .split(',')
+      .map(item => item.trim().toLowerCase())
+      .filter(Boolean)
+      .forEach(item => types.add(item));
+  }
+  return types;
+}
+
+function inferPageType(page) {
+  const url = page?.url ?? page?.sourceUrl ?? null;
+  const parts = extractPathPartsFromUrl(url);
+  const title = (page?.title ?? '').toLowerCase();
+  const types = collectJsonLdTypes(page?.jsonLd ?? []);
+
+  if (page?.isEscapeRoomReview || page?.escapeRoomScoring) return 'escapeRoomReview';
+  if (page?.escapeRoomGeneralData) return 'escapeRoomProfile';
+
+  if (types.has('review') || types.has('criticreview')) return 'review';
+  if (types.has('blogposting')) return parts.length > 1 ? 'blogPost' : 'article';
+  if (types.has('article')) return parts.length > 1 ? 'article' : 'page';
+
+  if (parts.length === 0) return 'landing';
+
+  if (parts[0] === 'blog') {
+    return parts.length === 1 ? 'blogIndex' : 'blogPost';
+  }
+
+  if (title.includes('review escape room') || title.includes('escape room')) {
+    return 'escapeRoomReview';
+  }
+
+  if (parts.includes('ranking')) return 'ranking';
+
+  return parts.length === 1 ? 'page' : 'section';
+}
+
+function deriveTags(page, type, pathParts) {
+  const tags = new Set();
+  if (type === 'blogPost' || type === 'blogIndex') tags.add('blog');
+  if (type === 'escapeRoomReview' || type === 'review') tags.add('review');
+  if (page?.escapeRoomScoring || type === 'escapeRoomReview') tags.add('escape-room');
+  if (Array.isArray(pathParts) && pathParts.length > 1) {
+    pathParts.slice(0, -1).forEach(part => {
+      const slug = slugifySegment(part);
+      if (slug) tags.add(slug);
+    });
+  }
+
+  if (Array.isArray(page?.headings)) {
+    const prominent = page.headings
+      .slice(0, 3)
+      .map(heading => heading?.text ?? '')
+      .filter(Boolean);
+    for (const heading of prominent) {
+      const slug = slugifySegment(heading);
+      if (slug) tags.add(slug);
+    }
+  }
+
+  for (const entry of page?.jsonLd ?? []) {
+    const rawType = entry?.type;
+    if (!rawType) continue;
+    String(rawType)
+      .split(',')
+      .map(item => slugifySegment(item))
+      .filter(Boolean)
+      .forEach(item => tags.add(item));
+  }
+
+  const categorySlug = slugifySegment(page?.escapeRoomGeneralData?.category);
+  if (categorySlug) tags.add(categorySlug);
+
+  return Array.from(tags);
+}
+
+function selectImages(images = []) {
+  const valid = Array.isArray(images) ? images.filter(image => image?.src) : [];
+  if (!valid.length) {
+    return { featuredImage: null, gallery: null };
+  }
+  const [first, ...rest] = valid;
+  return {
+    featuredImage: first ?? null,
+    gallery: rest.length ? rest : null
+  };
+}
+
+function buildEscapeRoomProfile(general = {}) {
+  if (!general || typeof general !== 'object') return null;
+  const profile = {
+    category: normalizeWhitespace(general.category),
+    province: normalizeWhitespace(general.province),
+    durationMinutes: typeof general.durationMinutes === 'number' ? general.durationMinutes : null,
+    durationText: normalizeWhitespace(general.durationText),
+    playersText: normalizeWhitespace(general.playersText),
+    minPlayers: typeof general.minPlayers === 'number' ? general.minPlayers : null,
+    maxPlayers: typeof general.maxPlayers === 'number' ? general.maxPlayers : null,
+    webUrl: general.webLink ?? null,
+    rawHtml: typeof general.raw === 'string' ? general.raw : null
+  };
+  const cleaned = pruneEmpty(profile);
+  return Object.keys(cleaned).length ? cleaned : null;
+}
+
+function toRatingNumber(value) {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const normalized = value.replace(',', '.');
+    const num = Number.parseFloat(normalized);
+    if (Number.isFinite(num)) return num;
+  }
+  return null;
+}
+
+function buildEscapeRoomScores(scoring = {}) {
+  if (!scoring || typeof scoring !== 'object') return null;
+
+  const categories = [];
+  let overall = null;
+
+  for (const [key, value] of Object.entries(scoring)) {
+    if (!value || typeof value !== 'object') continue;
+    if (key === 'rawHtml' || key === 'extractionDebug') continue;
+
+    const label = normalizeWhitespace(value.label) || key;
+    const score = {
+      id: slugifySegment(key) ?? key,
+      label,
+      value: toRatingNumber(value.value),
+      max: toRatingNumber(value.max),
+      ratio: toRatingNumber(value.ratio)
+    };
+
+    const cleaned = pruneEmpty(score);
+    if (!Object.keys(cleaned).length) continue;
+
+    const labelNorm = normalizeForComparison(label) || '';
+    if (!overall && labelNorm.includes('global')) {
+      overall = cleaned;
+    }
+
+    categories.push(cleaned);
+  }
+
+  categories.sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''));
+
+  const result = {
+    categories: categories.length ? categories : null,
+    overall: overall || null,
+    rawHtml: typeof scoring.rawHtml === 'string' ? scoring.rawHtml : null
+  };
+
+  const cleaned = pruneEmpty(result);
+  return Object.keys(cleaned).length ? cleaned : null;
 }
 
 function simplifyImages(images = []) {
@@ -434,12 +786,16 @@ function formatPage(page, options = {}) {
     language: normalizeWhitespace(page?.language),
     wordCount: wordCount || null,
     readingTimeMinutes: estimateReadingTime(wordCount),
+    contentHtml,
     headings,
     sections,
     paragraphs,
     images,
     links,
-    jsonLd
+    jsonLd,
+    escapeRoomGeneralData: page?.escapeRoomGeneralData ?? null,
+    escapeRoomScoring: page?.escapeRoomScoring ?? null,
+    isEscapeRoomReview: page?.isEscapeRoomReview ?? null
   };
 
   return pruneEmpty(payload);
@@ -459,7 +815,118 @@ function formatAsset(page, options = {}) {
   return pruneEmpty(payload);
 }
 
-async function run() {
+function buildGenericEntry(page, options = {}) {
+  if (!page) return null;
+
+  const pathParts = extractPathPartsFromUrl(page.url ?? page.sourceUrl ?? '');
+  const type = inferPageType(page);
+  const normalizedType = typeof type === 'string' ? type.toLowerCase() : 'page';
+
+  if (options.includeTypes && !options.includeTypes.has(normalizedType)) {
+    return null;
+  }
+
+  const slug = deriveSlugFromUrl(page.url ?? page.sourceUrl ?? '');
+  const pathValue = buildPathFromParts(pathParts);
+  const summary = page.metaDescription ?? (Array.isArray(page.paragraphs) ? page.paragraphs[0] ?? null : null);
+  const bodyText = Array.isArray(page.paragraphs) ? page.paragraphs.join('\n\n') || null : null;
+  const bodyHtml = page.contentHtml ?? null;
+  const { featuredImage, gallery } = selectImages(page.images);
+  const tags = deriveTags(page, type, pathParts).map(tag => tag.toLowerCase());
+  const profile = buildEscapeRoomProfile(page.escapeRoomGeneralData);
+  const scores = buildEscapeRoomScores(page.escapeRoomScoring);
+
+  if (scores && !tags.includes('escape-room')) {
+    tags.push('escape-room');
+  }
+
+  const meta = pruneEmpty({
+    originalUrl: page.url ?? null,
+    sourceUrls: Array.isArray(page.sourceUrls) && page.sourceUrls.length ? page.sourceUrls : null,
+    wordCount: page.wordCount ?? null,
+    readingTimeMinutes: page.readingTimeMinutes ?? null,
+    fetchedAt: page.fetchedAt ?? null,
+    status: page.status ?? null,
+    contentType: page.contentType ?? null
+  });
+
+  const entry = {
+    type,
+    slug,
+    path: pathValue,
+    title: page.title ?? null,
+    summary: summary ? normalizeWhitespace(summary) : null,
+    bodyHtml,
+    bodyText,
+    tags: tags.length ? Array.from(new Set(tags)) : null,
+    featuredImage,
+    gallery,
+    profile,
+    scores,
+    meta: Object.keys(meta).length ? meta : null
+  };
+
+  return pruneEmpty(entry);
+}
+
+function groupEntriesByType(entries = []) {
+  const groups = new Map();
+  for (const entry of entries) {
+    const key = typeof entry?.type === 'string' && entry.type.trim() ? entry.type.trim() : 'unknown';
+    const normalized = key.toLowerCase();
+    if (!groups.has(normalized)) {
+      groups.set(normalized, []);
+    }
+    groups.get(normalized).push(entry);
+  }
+  return groups;
+}
+
+async function writeGenericExports(entries, metadata, options) {
+  const outDir = options.outDir ?? DEFAULT_EXPORT_DIR;
+  const relativeOutDir = path.relative(ROOT_DIR, outDir);
+  await ensureDir(outDir);
+
+  const basePayload = {
+    generatedAt: metadata.generatedAt,
+    source: metadata.source,
+    total: entries.length
+  };
+
+  const mainPayload = {
+    ...basePayload,
+    entries
+  };
+
+  const mainPath = path.join(outDir, 'generic.json');
+  await writeJsonFile(mainPath, mainPayload);
+  console.log(`Colección genérica exportada (${entries.length} entradas) en ${path.join(relativeOutDir || '.', 'generic.json')}`);
+
+  if (options.splitJson) {
+    const groups = groupEntriesByType(entries);
+    for (const [type, items] of groups.entries()) {
+      const payload = {
+        ...basePayload,
+        total: items.length,
+        entries: items
+      };
+      const filePath = path.join(outDir, `${type}.json`);
+      await writeJsonFile(filePath, payload);
+      console.log(`Colección ${type} exportada (${items.length} entradas) en ${path.join(relativeOutDir || '.', `${type}.json`)}`);
+    }
+  }
+
+  if (options.emitNdjson) {
+    const groups = groupEntriesByType(entries);
+    for (const [type, items] of groups.entries()) {
+      const filePath = path.join(outDir, `${type}.ndjson`);
+      await writeNdjsonFile(filePath, items);
+      console.log(`Colección ${type} exportada en formato NDJSON (${items.length} líneas) en ${path.join(relativeOutDir || '.', `${type}.ndjson`)}`);
+    }
+  }
+}
+
+async function run(cliOptions) {
   try {
     const raw = await readFile(INPUT_PATH, 'utf8');
     const exportData = JSON.parse(raw);
@@ -578,10 +1045,35 @@ async function run() {
 
     await writeFile(OUTPUT_PATH, `${JSON.stringify(cleaned, null, 2)}\n`, 'utf8');
     console.log(`Export formateado guardado en ${path.relative(ROOT_DIR, OUTPUT_PATH)}`);
+
+    const filteredPages = cliOptions.minWords > 0
+      ? formattedPages.filter(page => (page.wordCount ?? 0) >= cliOptions.minWords)
+      : formattedPages;
+
+    const genericEntries = filteredPages
+      .map(page => buildGenericEntry(page, { includeTypes: cliOptions.includeTypes }))
+      .filter(Boolean)
+      .sort((a, b) => {
+        const pathA = a.path ?? '';
+        const pathB = b.path ?? '';
+        if (pathA !== pathB) return pathA.localeCompare(pathB);
+        const slugA = a.slug ?? '';
+        const slugB = b.slug ?? '';
+        if (slugA !== slugB) return slugA.localeCompare(slugB);
+        const typeA = a.type ?? '';
+        const typeB = b.type ?? '';
+        return typeA.localeCompare(typeB);
+      });
+
+    await writeGenericExports(genericEntries, {
+      generatedAt: cleaned.generatedAt,
+      source: cleaned.source
+    }, cliOptions);
   } catch (error) {
     console.error('No se pudo formatear el export:', error.message);
     process.exitCode = 1;
   }
 }
 
-run();
+const cliOptions = parseCliArgs(process.argv.slice(2));
+run(cliOptions);

@@ -92,6 +92,50 @@ function createAllowedHostnames(startUrl) {
 }
 
 const allowedHostnames = createAllowedHostnames(DEFAULT_START_URL);
+const allowedHostnameVariants = Array.from(allowedHostnames);
+
+function isDnsResolutionError(error) {
+  if (!error) return false;
+  const code = error.code || error.cause?.code;
+  if (code && (code === 'ENOTFOUND' || code === 'EAI_AGAIN')) {
+    return true;
+  }
+  const message = error.message || '';
+  return /ENOTFOUND|EAI_AGAIN/.test(message);
+}
+
+function nextFallbackUrl(currentUrl, triedHosts) {
+  try {
+    const parsed = new URL(currentUrl);
+    triedHosts.add(parsed.hostname);
+    for (const hostname of allowedHostnameVariants) {
+      if (!triedHosts.has(hostname)) {
+        const fallback = new URL(currentUrl);
+        fallback.hostname = hostname;
+        return fallback.toString();
+      }
+    }
+  } catch {}
+  return null;
+}
+
+async function axiosGetWithFallback(url, config = {}, triedHosts = new Set()) {
+  try {
+    return await axiosClient.get(url, config);
+  } catch (error) {
+    if (isDnsResolutionError(error)) {
+      const fallbackUrl = nextFallbackUrl(url, triedHosts);
+      if (fallbackUrl) {
+        console.warn(`[HTTP Fallback] DNS falló para ${url}; reintentando con ${fallbackUrl}`);
+        return axiosGetWithFallback(fallbackUrl, config, triedHosts);
+      }
+    }
+    if (triedHosts.size) {
+      error.attemptedHosts = Array.from(triedHosts);
+    }
+    throw error;
+  }
+}
 
 const visited = new Set();
 const enqueued = new Set();
@@ -599,7 +643,7 @@ export { extractEscapeRoomGeneralData, extractEscapeRoomScoring };
 
 async function fetchPage(url) {
   try {
-    const response = await axiosClient.get(url);
+    const response = await axiosGetWithFallback(url);
     return { success: true, status: response.status, data: response.data, headers: response.headers };
   } catch (error) {
     if (error.response) {
@@ -714,7 +758,7 @@ async function processUrl(url) {
 
 async function parseSitemap(sitemapUrl) {
   try {
-    const response = await axiosClient.get(sitemapUrl);
+    const response = await axiosGetWithFallback(sitemapUrl);
     const parser = new XMLParser({ ignoreAttributes: false, allowBooleanAttributes: true });
     const data = parser.parse(response.data);
     const urls = new Set();
@@ -784,7 +828,7 @@ async function discoverSeedUrls(startUrl) {
   const sitemapSeeds = new Set();
   const robotsUrl = `${start.origin}/robots.txt`;
   try {
-    const response = await axiosClient.get(robotsUrl);
+    const response = await axiosGetWithFallback(robotsUrl);
     console.log(`[Seeds] robots.txt obtenido de ${robotsUrl}`);
     const lines = response.data.split(/\r?\n/);
     for (const line of lines) {

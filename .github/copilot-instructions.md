@@ -1,7 +1,7 @@
 ## Contexto rápido
 
 Repositorio de herramientas y datos para el relanzamiento de www.thecovenant.es. Contiene:
-- `scripts/` : scraper (`scrape-thecovenant.mjs`) y formateador (`format-export.mjs`).
+- `scripts/` : scraper (`scrape-thecovenant.mjs`), formateador (`format-export.mjs`) y orquestador (`scrapefull.mjs`).
 - `data/` : exports JSON y carpetas de imágenes (`data/thecovenant-export.json`, `data/thecovenant-export-formatted.json`, `data/images/`).
 - `tests/` : pruebas unitarias pequeñas que usan fixtures HTML.
 
@@ -10,11 +10,12 @@ Los scripts son módulos ESM (import/export) y están pensados para ejecutarse c
 ## Qué necesita saber un agente para ser productivo
 
 - Comandos importantes:
+  - `npm run scrapefull` — orquesta el scraper, el formateador y muestra los exports en consola bajo logs `[scrapefull]`; respeta las mismas variables `SCRAPE_*` que los scripts individuales.
   - `npm run scrape` — ejecuta el scraper y luego el formateador (produce `data/thecovenant-export.json`).
   - `npm run format-export` — transforma `data/thecovenant-export.json` a `data/thecovenant-export-formatted.json`.
   - `npm test` / `npm run test:unit` — ejecuta `tests/extract.test.mjs`.
 
-- Variables de entorno relevantes para el scraper (`scripts/scrape-thecovenant.mjs`):
+- Variables de entorno relevantes para el scraper (`scripts/scrape-thecovenant.mjs` y consumidas también por `scrapefull.mjs`):
   - `SCRAPE_START_URL` (por defecto `https://www.thecovenant.es/`)
   - `SCRAPE_OUTPUT` (ruta de salida JSON)
   - `SCRAPE_MAX_PAGES`, `SCRAPE_CONCURRENCY`, `SCRAPE_TIMEOUT`
@@ -40,10 +41,11 @@ Los scripts son módulos ESM (import/export) y están pensados para ejecutarse c
 
 ## Depuración y workflow local
 
-- Para debug rápido del scraper:
+- Para debug rápido del scraper/orquestador:
   - Habilita trazas HTTP: `SCRAPE_VERBOSE=true npm run scrape`.
   - Desactivar barra si piped: `SCRAPE_PROGRESS_BAR=false`.
   - Limita páginas: `SCRAPE_MAX_PAGES=50` y reduce concurrencia para reproducibilidad.
+  - Si usas `npm run scrapefull`, añade las mismas variables antes del comando (`SCRAPE_MAX_PAGES=10 npm run scrapefull`).
 - El scraper guarda imágenes en `data/images/<hostname>/` y evita re-descargas si el fichero ya existe.
 
 ## Compatibilidad e intervención humana

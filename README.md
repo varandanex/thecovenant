@@ -35,6 +35,7 @@ Proyecto moderno para relanzar www.thecovenant.es con un stack centrado en conte
 > Este README se irá actualizando conforme se añadan módulos (CMS interno, editor rich text, despliegues automatizados, etc.).
 
 ## Herramientas de scraping y limpieza
+- `npm run scrapefull`: ejecuta la orquestación completa (`scrape-thecovenant.mjs` + `format-export.mjs`) y vuelca en consola los exports JSON generados.
 - `npm run scrape`: ejecuta el scraper original que descarga el contenido del sitio.
 - `npm run format-export`: toma `data/thecovenant-export.json`, simplifica el contenido extraído (textos, encabezados, imágenes, enlaces, schema.org) y genera `data/thecovenant-export-formatted.json` con una estructura más legible. El resultado incluye:
   - metadatos en `source` sobre la sesión de crawling;

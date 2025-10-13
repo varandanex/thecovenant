@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "scrape": "node scripts/scrape-thecovenant.mjs && node scripts/format-export.mjs",
+    "scrapefull": "node scripts/scrapefull.mjs",
     "format-export": "node scripts/format-export.mjs",
     "test": "node tests/extract.test.mjs",
     "test:unit": "node tests/extract.test.mjs"
