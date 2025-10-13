@@ -4,3 +4,6 @@ node_modules/
 
 # Imágenes descargadas por el scraper (no versionar)
 data/images/
+
+# Ignorar los exports generados por el scraper (ej: data/exports/)
+/data/exports/
