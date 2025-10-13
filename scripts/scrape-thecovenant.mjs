@@ -203,21 +203,6 @@ function toAbsoluteUrl(rawUrl, baseUrl) {
   }
 }
 
-function extractMetaTags($) {
-  const meta = [];
-  $('meta').each((_, element) => {
-    const attribs = element.attribs || {};
-    meta.push({
-      name: attribs.name || null,
-      property: attribs.property || null,
-      content: attribs.content || null,
-      charset: attribs.charset || null,
-      httpEquiv: attribs['http-equiv'] || null
-    });
-  });
-  return meta;
-}
-
 function extractLinkTags($, pageUrl) {
   const links = [];
   $('a[href]').each((_, element) => {
@@ -265,181 +250,6 @@ function extractImages($, pageUrl) {
     });
   });
   return images;
-}
-
-function extractMedia($, pageUrl) {
-  const media = { videos: [], audio: [], iframes: [] };
-  $('video').each((_, element) => {
-    const attribs = element.attribs || {};
-    const sources = [];
-    const $element = $(element);
-    $element.find('source[src]').each((_, source) => {
-      const $source = $(source);
-      sources.push({
-        src: toAbsoluteUrl($source.attr('src'), pageUrl),
-        type: $source.attr('type') || null
-      });
-    });
-    media.videos.push({
-      poster: toAbsoluteUrl(attribs.poster, pageUrl),
-      controls: attribs.controls !== undefined,
-      autoplay: attribs.autoplay !== undefined,
-      loop: attribs.loop !== undefined,
-      muted: attribs.muted !== undefined,
-      sources
-    });
-  });
-  $('audio').each((_, element) => {
-    const attribs = element.attribs || {};
-    const sources = [];
-    const $element = $(element);
-    $element.find('source[src]').each((_, source) => {
-      const $source = $(source);
-      sources.push({
-        src: toAbsoluteUrl($source.attr('src'), pageUrl),
-        type: $source.attr('type') || null
-      });
-    });
-    media.audio.push({
-      controls: attribs.controls !== undefined,
-      autoplay: attribs.autoplay !== undefined,
-      loop: attribs.loop !== undefined,
-      muted: attribs.muted !== undefined,
-      sources
-    });
-  });
-  $('iframe[src]').each((_, element) => {
-    const attribs = element.attribs || {};
-    media.iframes.push({
-      src: toAbsoluteUrl(attribs.src, pageUrl),
-      title: attribs.title || null,
-      allow: attribs.allow || null,
-      width: attribs.width || null,
-      height: attribs.height || null,
-      loading: attribs.loading || null
-    });
-  });
-  return media;
-}
-
-function extractJsonLd($) {
-  const scripts = [];
-  $('script[type="application/ld+json"]').each((_, element) => {
-    const $element = $(element);
-    const jsonText = $element.html()?.trim();
-    if (!jsonText) return;
-    try {
-      const data = JSON.parse(jsonText);
-      scripts.push(data);
-    } catch (error) {
-      scripts.push({ error: 'Invalid JSON-LD', raw: jsonText });
-    }
-  });
-  return scripts;
-}
-
-function extractOutline($, rootSelector) {
-  const headings = [];
-  const root = rootSelector ? $(rootSelector) : $('body');
-  root.find('h1, h2, h3, h4, h5, h6').each((_, element) => {
-    const tagName = element.tagName?.toLowerCase();
-    if (!tagName) return;
-    const level = Number.parseInt(tagName.replace('h', ''), 10);
-    const $element = $(element);
-    headings.push({
-      level,
-      text: $element.text().replace(/\s+/g, ' ').trim(),
-      id: element.attribs?.id || null,
-      html: $element.html()
-    });
-  });
-  const outline = [];
-  const stack = [];
-  for (const heading of headings) {
-    const node = { ...heading, children: [] };
-    while (stack.length && stack[stack.length - 1].level >= node.level) {
-      stack.pop();
-    }
-    if (stack.length === 0) {
-      outline.push(node);
-    } else {
-      stack[stack.length - 1].children.push(node);
-    }
-    stack.push(node);
-  }
-  return outline;
-}
-
-function extractContentBlocks($, pageUrl) {
-  const root = $('article').first().length ? $('article').first() : $('main').first().length ? $('main').first() : $('body');
-  const blocks = [];
-  const selector = 'h1, h2, h3, h4, h5, h6, p, blockquote, pre, code, ul, ol, figure, table';
-  root.find(selector).each((_, element) => {
-    const tagName = element.tagName?.toLowerCase();
-    if (!tagName) return;
-    const $element = $(element);
-    const text = $element.text().replace(/\s+/g, ' ').trim();
-    const block = {
-      tag: tagName,
-      text: text || null,
-      html: $element.html() || null
-    };
-    if (tagName === 'ul' || tagName === 'ol') {
-      block.items = $element.find('> li').map((_, li) => $(li).text().replace(/\s+/g, ' ').trim()).get();
-    }
-    if (tagName === 'figure') {
-      block.caption = $element.find('figcaption').text().trim() || null;
-      const img = $element.find('img').first();
-      if (img.length) {
-        block.image = {
-          src: toAbsoluteUrl(img.attr('src'), pageUrl),
-          alt: img.attr('alt') || null,
-          title: img.attr('title') || null
-        };
-      }
-    }
-    if (tagName === 'table') {
-      const rows = [];
-      $element.find('tr').each((_, row) => {
-        const $row = $(row);
-        rows.push($row.find('th, td').map((_, cell) => $(cell).text().replace(/\s+/g, ' ').trim()).get());
-      });
-      block.rows = rows;
-    }
-    blocks.push(block);
-  });
-  return blocks;
-}
-
-function extractSections($) {
-  const sections = [];
-  $('section').each((_, element) => {
-    const attribs = element.attribs || {};
-    const $element = $(element);
-    sections.push({
-      id: attribs.id || null,
-      className: attribs.class || null,
-      html: $element.html(),
-      text: $element.text().replace(/\s+/g, ' ').trim() || null
-    });
-  });
-  return sections;
-}
-
-function extractFeeds($, pageUrl) {
-  const feeds = [];
-  $('link[rel="alternate"]').each((_, element) => {
-    const attribs = element.attribs || {};
-    const type = attribs.type || '';
-    if (type.includes('xml') || type.includes('rss') || type.includes('atom') || type.includes('json')) {
-      feeds.push({
-        type,
-        title: attribs.title || null,
-        href: toAbsoluteUrl(attribs.href, pageUrl)
-      });
-    }
-  });
-  return feeds;
 }
 
 // Extrae información estructurada de la ficha de escape room (tabla DATOS GENERALES)
@@ -682,25 +492,10 @@ async function processUrl(url) {
     status: pageResult.status,
     fetchedAt: new Date().toISOString(),
     contentType: pageResult.headers?.['content-type'] || null,
-    contentLength: pageResult.headers?.['content-length'] || null,
     title: $('title').first().text().trim() || null,
-    language: $('html').attr('lang') || null,
     metaDescription: $('meta[name="description"]').attr('content') || null,
-    canonicalUrl: toAbsoluteUrl($('link[rel="canonical"]').attr('href'), url),
-    meta: extractMetaTags($),
-    feeds: extractFeeds($, url),
     links: extractLinkTags($, url),
     images: extractImages($, url),
-    media: extractMedia($, url),
-    outline: extractOutline($),
-    sections: extractSections($),
-    contentBlocks: extractContentBlocks($, url),
-    textContent: $('body').text().replace(/\s+/g, ' ').trim() || null,
-    jsonLd: extractJsonLd($),
-    stylesheets: $('link[rel="stylesheet"]').map((_, el) => toAbsoluteUrl(el.attribs?.href, url)).get(),
-    inlineStyles: $('style').map((_, el) => ($(el).html() || '').trim()).get(),
-    scripts: $('script[src]').map((_, el) => toAbsoluteUrl(el.attribs?.src, url)).get(),
-    inlineScripts: $('script:not([src])').map((_, el) => ($(el).html() || '').trim()).get(),
     rawHtml: html
   };
 

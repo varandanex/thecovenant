@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as cheerio from 'cheerio';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, '..');
@@ -203,6 +204,237 @@ function decodeEntities(text) {
     '&gt;': '>'
   };
   return text.replace(/&(nbsp|amp|quot|#39|lt|gt);/g, match => entities[match] ?? match);
+}
+
+const cheerioCache = new WeakMap();
+const derivedCache = new WeakMap();
+
+function getDomForPage(page) {
+  if (!page || typeof page !== 'object') return null;
+  if (cheerioCache.has(page)) return cheerioCache.get(page);
+  const rawHtml = typeof page.rawHtml === 'string' ? page.rawHtml : null;
+  if (!rawHtml) return null;
+  const $ = cheerio.load(rawHtml, { decodeEntities: false });
+  cheerioCache.set(page, $);
+  return $;
+}
+
+function getDerivedStore(page) {
+  if (!page || typeof page !== 'object') return null;
+  let store = derivedCache.get(page);
+  if (!store) {
+    store = {};
+    derivedCache.set(page, store);
+  }
+  return store;
+}
+
+function toAbsoluteUrl(rawUrl, baseUrl) {
+  if (!rawUrl) return null;
+  try {
+    if (baseUrl) {
+      return new URL(rawUrl, baseUrl).toString();
+    }
+    return new URL(rawUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
+function extractOutlineFromDom($, rootSelector) {
+  if (!$) return [];
+  const headings = [];
+  const root = rootSelector ? $(rootSelector) : $('body');
+  root.find('h1, h2, h3, h4, h5, h6').each((_, element) => {
+    const tagName = element.tagName?.toLowerCase();
+    if (!tagName) return;
+    const level = Number.parseInt(tagName.replace('h', ''), 10);
+    const $element = $(element);
+    headings.push({
+      level,
+      text: $element.text().replace(/\s+/g, ' ').trim(),
+      id: element.attribs?.id || null,
+      html: $element.html() || null
+    });
+  });
+  const outline = [];
+  const stack = [];
+  for (const heading of headings) {
+    const node = { ...heading, children: [] };
+    while (stack.length && stack[stack.length - 1].level >= node.level) {
+      stack.pop();
+    }
+    if (stack.length === 0) {
+      outline.push(node);
+    } else {
+      stack[stack.length - 1].children.push(node);
+    }
+    stack.push(node);
+  }
+  return outline;
+}
+
+function extractSectionsFromDom($) {
+  if (!$) return [];
+  const sections = [];
+  $('section').each((_, element) => {
+    const attribs = element.attribs || {};
+    const $element = $(element);
+    sections.push({
+      id: attribs.id || null,
+      className: attribs.class || null,
+      html: $element.html() || null,
+      text: $element.text().replace(/\s+/g, ' ').trim() || null
+    });
+  });
+  return sections;
+}
+
+function extractContentBlocksFromDom($, pageUrl) {
+  if (!$) return [];
+  const root = $('article').first().length ? $('article').first() : $('main').first().length ? $('main').first() : $('body');
+  const blocks = [];
+  const selector = 'h1, h2, h3, h4, h5, h6, p, blockquote, pre, code, ul, ol, figure, table';
+  root.find(selector).each((_, element) => {
+    const tagName = element.tagName?.toLowerCase();
+    if (!tagName) return;
+    const $element = $(element);
+    const text = $element.text().replace(/\s+/g, ' ').trim();
+    const block = {
+      tag: tagName,
+      text: text || null,
+      html: $element.html() || null
+    };
+    if (tagName === 'ul' || tagName === 'ol') {
+      block.items = $element.find('> li').map((_, li) => $(li).text().replace(/\s+/g, ' ').trim()).get();
+    }
+    if (tagName === 'figure') {
+      block.caption = $element.find('figcaption').text().trim() || null;
+      const img = $element.find('img').first();
+      if (img.length) {
+        block.image = {
+          src: toAbsoluteUrl(img.attr('src'), pageUrl),
+          alt: img.attr('alt') || null,
+          title: img.attr('title') || null
+        };
+      }
+    }
+    if (tagName === 'table') {
+      const rows = [];
+      $element.find('tr').each((_, row) => {
+        const $row = $(row);
+        rows.push($row.find('th, td').map((_, cell) => $(cell).text().replace(/\s+/g, ' ').trim()).get());
+      });
+      block.rows = rows;
+    }
+    blocks.push(block);
+  });
+  return blocks;
+}
+
+function getLanguageFromPage(page) {
+  if (!page || typeof page !== 'object') return null;
+  if (typeof page.language === 'string') {
+    const normalized = normalizeWhitespace(page.language);
+    if (normalized) return normalized;
+  }
+  const store = getDerivedStore(page);
+  if (store && Object.prototype.hasOwnProperty.call(store, 'language')) {
+    return store.language ?? null;
+  }
+  const $ = getDomForPage(page);
+  const lang = $ ? normalizeWhitespace($('html').attr('lang') || null) : null;
+  if (store) store.language = lang ?? null;
+  return lang ?? null;
+}
+
+function getTextContentFromPage(page) {
+  if (!page || typeof page !== 'object') return null;
+  if (typeof page.textContent === 'string') {
+    const normalized = page.textContent.replace(/\s+/g, ' ').trim();
+    if (normalized) return normalized;
+  }
+  const store = getDerivedStore(page);
+  if (store && Object.prototype.hasOwnProperty.call(store, 'textContent')) {
+    return store.textContent ?? null;
+  }
+  const $ = getDomForPage(page);
+  const text = $ ? $('body').text().replace(/\s+/g, ' ').trim() || null : null;
+  if (store) store.textContent = text ?? null;
+  return text ?? null;
+}
+
+function getSectionsFromPage(page) {
+  if (!page || typeof page !== 'object') return [];
+  if (Array.isArray(page.sections) && page.sections.length) {
+    return page.sections;
+  }
+  const store = getDerivedStore(page);
+  if (store && Object.prototype.hasOwnProperty.call(store, 'sections')) {
+    return store.sections ?? [];
+  }
+  const $ = getDomForPage(page);
+  const sections = extractSectionsFromDom($);
+  if (store) store.sections = sections;
+  return sections;
+}
+
+function getOutlineFromPage(page) {
+  if (!page || typeof page !== 'object') return [];
+  if (Array.isArray(page.outline) && page.outline.length) {
+    return page.outline;
+  }
+  const store = getDerivedStore(page);
+  if (store && Object.prototype.hasOwnProperty.call(store, 'outline')) {
+    return store.outline ?? [];
+  }
+  const $ = getDomForPage(page);
+  const outline = extractOutlineFromDom($);
+  if (store) store.outline = outline;
+  return outline;
+}
+
+function getJsonLdFromPage(page) {
+  if (!page || typeof page !== 'object') return [];
+  if (Array.isArray(page.jsonLd) && page.jsonLd.length) {
+    return page.jsonLd;
+  }
+  const store = getDerivedStore(page);
+  if (store && Object.prototype.hasOwnProperty.call(store, 'jsonLd')) {
+    return store.jsonLd ?? [];
+  }
+  const $ = getDomForPage(page);
+  const items = [];
+  if ($) {
+    $('script[type="application/ld+json"]').each((_, element) => {
+      const $element = $(element);
+      const jsonText = $element.html()?.trim();
+      if (!jsonText) return;
+      try {
+        const data = JSON.parse(jsonText);
+        items.push(data);
+      } catch (error) {
+        items.push({ error: 'Invalid JSON-LD', raw: jsonText });
+      }
+    });
+  }
+  if (store) store.jsonLd = items;
+  return items;
+}
+
+function getContentBlocksFromPage(page) {
+  if (!page || typeof page !== 'object') return [];
+  if (Array.isArray(page.contentBlocks) && page.contentBlocks.length) {
+    return page.contentBlocks;
+  }
+  const store = getDerivedStore(page);
+  if (store && Object.prototype.hasOwnProperty.call(store, 'contentBlocks')) {
+    return store.contentBlocks ?? [];
+  }
+  const $ = getDomForPage(page);
+  const blocks = extractContentBlocksFromDom($, page?.url ?? null);
+  if (store) store.contentBlocks = blocks;
+  return blocks;
 }
 
 function flattenOutline(outline = []) {
@@ -532,7 +764,7 @@ function shouldStopAtBlock(block) {
 }
 
 function extractMainContentBlocks(page) {
-  const blocks = Array.isArray(page?.contentBlocks) ? page.contentBlocks : [];
+  const blocks = getContentBlocksFromPage(page);
   if (blocks.length === 0) return [];
 
   let startIndex = blocks.findIndex(block => isHeadingTag(block?.tag) && normalizeWhitespace(block?.text));
@@ -759,7 +991,7 @@ function formatPage(page, options = {}) {
   let paragraphs = extractParagraphsFromBlocks(mainBlocks);
 
   if (paragraphs.length === 0) {
-    paragraphs = splitTextContent(page?.textContent ?? '');
+    paragraphs = splitTextContent(getTextContentFromPage(page) ?? '');
   }
 
   const contentHtml = buildHtmlFromBlocks(mainBlocks);
@@ -769,11 +1001,11 @@ function formatPage(page, options = {}) {
   const wordCount = paragraphs.reduce((total, paragraph) => total + paragraph.split(/\s+/).filter(Boolean).length, 0);
   const { url, sourceUrl } = normalizePageUrl(page, options.primaryUrl);
 
-  const headings = flattenOutline(page?.outline ?? []);
+  const headings = flattenOutline(getOutlineFromPage(page));
   const images = simplifyImages(filteredImages);
   const links = categorizeLinks(filteredLinks);
-  const jsonLd = summarizeJsonLd(page?.jsonLd ?? []);
-  const sections = simplifySections(page?.sections ?? []);
+  const jsonLd = summarizeJsonLd(getJsonLdFromPage(page));
+  const sections = simplifySections(getSectionsFromPage(page));
 
   const payload = {
     url,
@@ -783,7 +1015,7 @@ function formatPage(page, options = {}) {
     contentType: page?.contentType ?? null,
     title: normalizeWhitespace(page?.title),
     metaDescription: normalizeWhitespace(page?.metaDescription),
-    language: normalizeWhitespace(page?.language),
+    language: getLanguageFromPage(page),
     wordCount: wordCount || null,
     readingTimeMinutes: estimateReadingTime(wordCount),
     contentHtml,
@@ -809,7 +1041,6 @@ function formatAsset(page, options = {}) {
     status: page?.status ?? null,
     fetchedAt: page?.fetchedAt ?? null,
     contentType: page?.contentType ?? null,
-    contentLength: page?.contentLength ?? null,
     title: normalizeWhitespace(page?.title)
   };
   return pruneEmpty(payload);
