@@ -1,3 +1,7 @@
 # Ignore scraper outputs by default
 *.json
 !README.md
+
+# Ignorar subcarpeta de imágenes descargadas
+images/
+!images/README.md

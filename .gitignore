@@ -1,3 +1,6 @@
 node_modules/
 .npmrc
 .DS_Store
+
+# Imágenes descargadas por el scraper (no versionar)
+data/images/

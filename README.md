@@ -33,3 +33,10 @@ Proyecto moderno para relanzar www.thecovenant.es con un stack centrado en conte
 - Plantillas de formularios con react-hook-form + zod: https://ui.shadcn.com/docs/components/form
 
 > Este README se irá actualizando conforme se añadan módulos (CMS interno, editor rich text, despliegues automatizados, etc.).
+
+## Herramientas de scraping y limpieza
+- `npm run scrape`: ejecuta el scraper original que descarga el contenido del sitio.
+- `npm run format-export`: toma `data/thecovenant-export.json`, simplifica el contenido extraído (textos, encabezados, imágenes, enlaces, schema.org) y genera `data/thecovenant-export-formatted.json` con una estructura más legible. El resultado incluye:
+  - metadatos en `source` sobre la sesión de crawling;
+  - cada página dentro de `pages`, con una lista `sourceUrls` que conserva las variantes originales de la URL;
+  - un bloque `assets` con ficheros descargados (por ejemplo imágenes) y sus cabeceras HTTP cuando hay material disponible.
