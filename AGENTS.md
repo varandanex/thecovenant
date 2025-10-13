@@ -1,32 +1,43 @@
-# Repository Guidelines
+# Directrices del repositorio
 
-## Project Structure & Module Organization
-- **`scripts/`**: Node.js ESM utilities. `scrape-thecovenant.mjs` crawls www.thecovenant.es, `format-export.mjs` limpia el dataset capturado y `scrapefull.mjs` orquesta ambas tareas mostrando los exports generados.
-- **`data/`**: Raw and formatted exports (`thecovenant-export*.json`) plus scraped assets. Treated as build artefacts, never edited by hand.
-- **`tests/`**: Minimal runner (`extract.test.mjs`) and HTML fixtures used to validate extraction helpers.
-- **`README.md`**: Architectural vision for the forthcoming Next.js + Supabase stack; align scraper output with this roadmap.
+## Estructura del proyecto y organización de módulos
 
-## Build, Test & Development Commands
-- `npm run scrape`: Crawls the live site. Use environment overrides like `SCRAPE_START_URL` or `SCRAPE_MAX_PAGES` when staging.
-- `npm run scrapefull`: Ejecuta `scrape-thecovenant.mjs`, luego `format-export.mjs` y emite en consola los exports resultantes.
-- `npm run format-export`: Normalizes `data/thecovenant-export.json` into the formatted export; run after every scrape.
-- `npm test` / `npm run test:unit`: Executes `tests/extract.test.mjs`; exits non-zero on first failure to keep CI feedback tight.
+- **`scripts/`**: Utilidades Node.js (ESM). `scrape-thecovenant.mjs` es el scraper, `format-export.mjs` formatea el export y `scrapefull.mjs` orquesta ambas tareas.
+- **`data/`**: Exports en crudo y formateados (`thecovenant-export*.json`) y activos descargados (imágenes). Son artefactos de build y no deben editarse a mano.
+- **`tests/`**: Runner de pruebas mínimo (`extract.test.mjs`) y fixtures HTML para validar extractores.
+- **`README.md`**: Notas arquitectónicas (Next.js + Supabase); alinea la salida del scraper con esta hoja de ruta.
 
-## Coding Style & Naming Conventions
-- Prefer modern ESM (`.mjs`) with top-level `import`/`export`. Keep modules small and task-focused under `scripts/`.
-- Use two-space indentation, trailing commas omitted, and descriptive camelCase identifiers (`extractEscapeRoomScoring`).
-- Guard external calls with clear constants (timeout, concurrency) and surface configuration via `process.env` keys prefixed with `SCRAPE_`.
+Preferencia de idioma: los agentes de código deben responder por defecto en español, salvo que se solicite explícitamente otro idioma.
 
-## Testing Guidelines
-- Add new fixtures in `tests/fixtures/` mirroring real HTML edge cases; name using hyphenated English descriptions.
-- Extend `tests/extract.test.mjs` with single-function helper assertions. Keep each test self-contained and deterministic.
-- Aim for functional coverage of parsing branches (general data only, scoring only, error paths) and update fixtures when site markup shifts.
+## Comandos de build, test y desarrollo
 
-## Commit & Pull Request Guidelines
-- Follow the existing Conventional Commits pattern (`feat:`, `fix:`, `chore:`) seen in `git log` for clarity in changelog generation.
-- Reference any tracked tasks/issues in the body. Summarize scraper impacts (new fields, env variables) and include before/after snippets or sample JSON when relevant.
-- For pull requests, list test commands executed, attach diffs for regenerated data files, and call out breaking scraper assumptions so reviewers can verify with fresh runs.
+- `npm run scrape`: Ejecuta el scraper. Se pueden aplicar variables de entorno para anular valores por defecto (`SCRAPE_START_URL`, `SCRAPE_MAX_PAGES`, etc.).
 
-## Security & Configuration Notes
-- Never commit `.env*` secrets. Document required `SCRAPE_*` variables in PR descriptions when introducing new ones.
-- When running the scraper, respect the public robots.txt and limit concurrency via `SCRAPE_CONCURRENCY` before targeting non-production hosts.
+- `npm run scrapefull`: Orquesta `scrape-thecovenant.mjs` y `format-export.mjs`, imprimiendo los exports generados.
+
+- `npm run format-export`: Normaliza `data/thecovenant-export.json` y genera `data/thecovenant-export-formatted.json`.
+
+- `npm test` / `npm run test:unit`: Ejecuta `tests/extract.test.mjs`.
+
+## Estilo de código y convenciones de nombrado
+
+- Usar ESM moderno (`.mjs`) con `import`/`export`. Mantener módulos pequeños y enfocados bajo `scripts/`.
+- Indentación de dos espacios. Evitar comas finales innecesarias. Usar identificadores en camelCase descriptivos (p. ej. `extractEscapeRoomScoring`).
+- Proteger llamadas externas con constantes claras (timeout, concurrency) y exponer configuración vía `process.env` con prefijo `SCRAPE_`.
+
+## Guías de pruebas
+
+- Las pruebas no requieren red: usan fixtures en `tests/fixtures/` (`*.html`). Al añadir detección de nuevos elementos HTML, añade un fixture y un test que importe la función correspondiente (no ejecutar el crawler completo).
+- Extender `tests/extract.test.mjs` con pruebas enfocadas por función. Mantener cada test determinista y autocontenido.
+- Buscar cobertura funcional de las ramas del parser (solo datos generales, solo scoring, rutas de error) y actualizar fixtures cuando cambie el marcado del sitio.
+
+## Commits y pull requests
+
+- Seguir el patrón de Conventional Commits (`feat:`, `fix:`, `chore:`) para generar changelogs claros.
+- Referenciar tareas o issues relacionados en el cuerpo del PR. Resumir el impacto del scraper (nuevos campos, variables `SCRAPE_*`) e incluir snippets de antes/después o JSON de ejemplo cuando proceda.
+- En los PRs, listar los comandos de test ejecutados, adjuntar diffs de datos regenerados y señalar supuestos rompibles del scraper para que los revisores puedan verificar con ejecuciones nuevas.
+
+## Seguridad y configuración
+
+- Nunca commitear archivos de entorno o secretos (`.env*`). Documentar las variables `SCRAPE_*` necesarias en la descripción del PR cuando se añadan nuevas.
+- Al ejecutar el scraper, respetar `robots.txt` del sitio y reducir la concurrencia (`SCRAPE_CONCURRENCY`) antes de apuntar a hosts que no sean de producción.

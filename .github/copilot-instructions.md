@@ -7,6 +7,8 @@ Repositorio de herramientas y datos para el relanzamiento de www.thecovenant.es.
 
 Los scripts son módulos ESM (import/export) y están pensados para ejecutarse con Node.js (sin bundler). Evitar efectos colaterales al importar módulos: el crawler usa una comprobación `invokedAsScript` para no ejecutarse durante imports.
 
+Preferencia de idioma: los agentes de código deben responder por defecto en español, salvo que se solicite explícitamente otro idioma.
+
 ## Qué necesita saber un agente para ser productivo
 
 - Comandos importantes:
