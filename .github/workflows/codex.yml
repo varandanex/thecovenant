@@ -1,0 +1,14 @@
+name: Codex Review
+on:
+  pull_request:
+    types: [opened, reopened, labeled, synchronize]
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'codex')
+    steps:
+      - name: Request Codex Review
+        uses: openai/codex-action@v1
+        with:
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-4o
