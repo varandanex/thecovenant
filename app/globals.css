@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-background text-foreground font-body antialiased;
+  background-image: radial-gradient(circle at top right, rgba(124, 77, 255, 0.15), transparent 55%),
+    radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.05), transparent 60%);
+  min-height: 100vh;
+}
+
+::selection {
+  background: theme("colors.primary.DEFAULT");
+  color: theme("colors.primary.foreground");
+}
+
+.container-bleed {
+  width: min(1200px, calc(100% - 2.5rem));
+  margin-inline: auto;
+}
+
+.prose-custom {
+  @apply prose prose-invert prose-neutral max-w-none;
+}
+
+.prose-custom h2 {
+  @apply font-heading text-3xl tracking-tight text-foreground;
+}
+
+.prose-custom a {
+  @apply text-primary underline decoration-2 underline-offset-4 transition-colors hover:text-primary/80;
+}
+
+.prose-custom blockquote {
+  @apply border-l-4 border-primary/60 bg-accent/60 p-6 text-lg italic text-foreground;
+}
