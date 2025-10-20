@@ -8,11 +8,12 @@ export type EscapeRoomRankingEntry = {
   province: string;
   studio: string;
   rating: number;
+  difficultyScore: number;
+  difficultyLabel: "Baja" | "Media" | "Alta";
   immersion: number;
+  fun: number;
   puzzles: number;
-  narrative: number;
-  intensity: number;
-  difficulty: "Baja" | "Media" | "Alta";
+  gameMaster: number;
   durationMinutes: number;
   minPlayers: number;
   maxPlayers: number;
@@ -50,11 +51,12 @@ export const escapeRoomRanking: EscapeRoomRankingEntry[] = [
     city: "Barcelona",
     province: "Barcelona",
     rating: 9.8,
+    difficultyScore: 6.5,
+    difficultyLabel: "Media",
     immersion: 9.9,
+    fun: 9.7,
     puzzles: 9.2,
-    narrative: 9.7,
-    intensity: 7.5,
-    difficulty: "Media",
+    gameMaster: 7.5,
     durationMinutes: 120,
     minPlayers: 3,
     maxPlayers: 6,
@@ -71,11 +73,12 @@ export const escapeRoomRanking: EscapeRoomRankingEntry[] = [
     city: "Mataró",
     province: "Barcelona",
     rating: 9.7,
+    difficultyScore: 6.4,
+    difficultyLabel: "Media",
     immersion: 9.8,
+    fun: 9.5,
     puzzles: 9.4,
-    narrative: 9.5,
-    intensity: 8.2,
-    difficulty: "Media",
+    gameMaster: 8.2,
     durationMinutes: 100,
     minPlayers: 3,
     maxPlayers: 5,
@@ -92,11 +95,12 @@ export const escapeRoomRanking: EscapeRoomRankingEntry[] = [
     city: "Bilbao",
     province: "Bizkaia",
     rating: 9.6,
+    difficultyScore: 6.2,
+    difficultyLabel: "Media",
     immersion: 9.5,
+    fun: 9.4,
     puzzles: 9.3,
-    narrative: 9.4,
-    intensity: 7.8,
-    difficulty: "Media",
+    gameMaster: 7.8,
     durationMinutes: 90,
     minPlayers: 2,
     maxPlayers: 5,
@@ -113,11 +117,12 @@ export const escapeRoomRanking: EscapeRoomRankingEntry[] = [
     city: "Madrid",
     province: "Madrid",
     rating: 9.5,
+    difficultyScore: 8.1,
+    difficultyLabel: "Alta",
     immersion: 9.3,
+    fun: 9.2,
     puzzles: 9.6,
-    narrative: 9.2,
-    intensity: 6.5,
-    difficulty: "Alta",
+    gameMaster: 6.5,
     durationMinutes: 80,
     minPlayers: 2,
     maxPlayers: 5,
@@ -134,11 +139,12 @@ export const escapeRoomRanking: EscapeRoomRankingEntry[] = [
     city: "Valencia",
     province: "Valencia",
     rating: 9.4,
+    difficultyScore: 6.9,
+    difficultyLabel: "Media",
     immersion: 9.6,
+    fun: 9.3,
     puzzles: 9.1,
-    narrative: 9.3,
-    intensity: 8.8,
-    difficulty: "Media",
+    gameMaster: 8.8,
     durationMinutes: 100,
     minPlayers: 3,
     maxPlayers: 6,
@@ -155,11 +161,12 @@ export const escapeRoomRanking: EscapeRoomRankingEntry[] = [
     city: "Hospitalet de Llobregat",
     province: "Barcelona",
     rating: 9.3,
+    difficultyScore: 6.0,
+    difficultyLabel: "Media",
     immersion: 9.1,
+    fun: 9.0,
     puzzles: 9.4,
-    narrative: 9.0,
-    intensity: 7.1,
-    difficulty: "Media",
+    gameMaster: 7.1,
     durationMinutes: 75,
     minPlayers: 2,
     maxPlayers: 6,
@@ -176,11 +183,12 @@ export const escapeRoomRanking: EscapeRoomRankingEntry[] = [
     city: "Cornellà",
     province: "Barcelona",
     rating: 9.2,
+    difficultyScore: 6.3,
+    difficultyLabel: "Media",
     immersion: 9.4,
+    fun: 9.1,
     puzzles: 9.0,
-    narrative: 9.1,
-    intensity: 7.9,
-    difficulty: "Media",
+    gameMaster: 7.9,
     durationMinutes: 80,
     minPlayers: 2,
     maxPlayers: 6,
@@ -197,11 +205,12 @@ export const escapeRoomRanking: EscapeRoomRankingEntry[] = [
     city: "Sevilla",
     province: "Sevilla",
     rating: 9.1,
+    difficultyScore: 6.7,
+    difficultyLabel: "Media",
     immersion: 9.3,
+    fun: 9.0,
     puzzles: 8.8,
-    narrative: 9.0,
-    intensity: 8.5,
-    difficulty: "Media",
+    gameMaster: 8.5,
     durationMinutes: 95,
     minPlayers: 3,
     maxPlayers: 6,
@@ -218,11 +227,12 @@ export const escapeRoomRanking: EscapeRoomRankingEntry[] = [
     city: "Zaragoza",
     province: "Zaragoza",
     rating: 9.0,
+    difficultyScore: 8.5,
+    difficultyLabel: "Alta",
     immersion: 8.9,
+    fun: 8.7,
     puzzles: 9.2,
-    narrative: 8.7,
-    intensity: 7.0,
-    difficulty: "Alta",
+    gameMaster: 7.0,
     durationMinutes: 70,
     minPlayers: 2,
     maxPlayers: 5,
@@ -239,11 +249,12 @@ export const escapeRoomRanking: EscapeRoomRankingEntry[] = [
     city: "Barcelona",
     province: "Barcelona",
     rating: 8.9,
+    difficultyScore: 6.1,
+    difficultyLabel: "Media",
     immersion: 9.2,
+    fun: 9.0,
     puzzles: 8.7,
-    narrative: 9.0,
-    intensity: 8.3,
-    difficulty: "Media",
+    gameMaster: 8.3,
     durationMinutes: 85,
     minPlayers: 2,
     maxPlayers: 5,
@@ -260,11 +271,12 @@ export const escapeRoomRanking: EscapeRoomRankingEntry[] = [
     city: "Barcelona",
     province: "Barcelona",
     rating: 8.8,
+    difficultyScore: 5.9,
+    difficultyLabel: "Media",
     immersion: 8.7,
+    fun: 8.5,
     puzzles: 9.1,
-    narrative: 8.5,
-    intensity: 6.8,
-    difficulty: "Media",
+    gameMaster: 6.8,
     durationMinutes: 75,
     minPlayers: 2,
     maxPlayers: 4,
@@ -281,11 +293,12 @@ export const escapeRoomRanking: EscapeRoomRankingEntry[] = [
     city: "Málaga",
     province: "Málaga",
     rating: 8.7,
+    difficultyScore: 6.4,
+    difficultyLabel: "Media",
     immersion: 8.9,
+    fun: 8.8,
     puzzles: 8.6,
-    narrative: 8.8,
-    intensity: 7.6,
-    difficulty: "Media",
+    gameMaster: 7.6,
     durationMinutes: 80,
     minPlayers: 2,
     maxPlayers: 6,
@@ -324,20 +337,21 @@ function articleToRankingEntry(article: Article): EscapeRoomRankingEntry | null 
   // Puntuación global
   const rating = escapeRoomScoring.global?.ratio ? escapeRoomScoring.global.ratio * 10 : 0;
 
-  // Métricas individuales
-  const immersion = escapeRoomScoring.immersion?.ratio ? escapeRoomScoring.immersion.ratio * 10 : 0;
-  const puzzles = escapeRoomScoring.puzzles?.ratio ? escapeRoomScoring.puzzles.ratio * 10 : 0;
-  const narrative = escapeRoomScoring.fun?.ratio ? escapeRoomScoring.fun.ratio * 10 : 0; // Usamos 'fun' como narrativa
-  const intensity = escapeRoomScoring.terror?.ratio ? escapeRoomScoring.terror.ratio * 10 : 0;
-
   // Dificultad
   const difficultyRatio = escapeRoomScoring.difficulty?.ratio ?? 0;
-  let difficulty: "Baja" | "Media" | "Alta" = "Media";
+  const difficultyScore = difficultyRatio * 10;
+  let difficultyLabel: "Baja" | "Media" | "Alta" = "Media";
   if (difficultyRatio < 0.4) {
-    difficulty = "Baja";
+    difficultyLabel = "Baja";
   } else if (difficultyRatio > 0.7) {
-    difficulty = "Alta";
+    difficultyLabel = "Alta";
   }
+
+  // Métricas individuales
+  const immersion = escapeRoomScoring.immersion?.ratio ? escapeRoomScoring.immersion.ratio * 10 : 0;
+  const fun = escapeRoomScoring.fun?.ratio ? escapeRoomScoring.fun.ratio * 10 : 0;
+  const puzzles = escapeRoomScoring.puzzles?.ratio ? escapeRoomScoring.puzzles.ratio * 10 : 0;
+  const gameMaster = escapeRoomScoring.gameMaster?.ratio ? escapeRoomScoring.gameMaster.ratio * 10 : 0;
 
   // Duración
   const durationMinutes = escapeRoomGeneralData.durationMinutes ?? 60;
@@ -363,11 +377,12 @@ function articleToRankingEntry(article: Article): EscapeRoomRankingEntry | null 
     province,
     studio,
     rating,
+    difficultyScore,
+    difficultyLabel,
     immersion,
+    fun,
     puzzles,
-    narrative,
-    intensity,
-    difficulty,
+    gameMaster,
     durationMinutes,
     minPlayers,
     maxPlayers,

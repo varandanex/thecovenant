@@ -53,11 +53,11 @@ Article → EscapeRoomRankingEntry
 │  └─ webLink → url
 └─ escapeRoomScoring
    ├─ global.ratio → rating (× 10)
+   ├─ difficulty.ratio → difficultyScore (× 10) + difficultyLabel (Baja/Media/Alta)
    ├─ immersion.ratio → immersion (× 10)
+   ├─ fun.ratio → fun (× 10)
    ├─ puzzles.ratio → puzzles (× 10)
-   ├─ fun.ratio → narrative (× 10)
-   ├─ terror.ratio → intensity (× 10)
-   └─ difficulty.ratio → difficulty (Baja/Media/Alta)
+   └─ gameMaster.ratio → gameMaster (× 10)
 ```
 
 ## Cómo activar la base de datos
