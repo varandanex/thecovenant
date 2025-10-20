@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ArticleCard } from "../components/article-card";
 import { RichContent } from "../components/rich-content";
+import { EscapeRoomInfo } from "../components/escape-room-info";
+import { EscapeRoomScoring } from "../components/escape-room-scoring";
 import { getAllArticlesAsync, getArticleBySlugAsync } from "../lib/content";
 
 export async function generateStaticParams() {
@@ -73,7 +75,13 @@ export default async function ArticlePage({ params }: { params: { slug?: string[
           />
         </figure>
       ) : null}
+      {article.escapeRoomGeneralData ? (
+        <EscapeRoomInfo data={article.escapeRoomGeneralData} />
+      ) : null}
       <RichContent sections={article.sections} />
+      {article.escapeRoomScoring ? (
+        <EscapeRoomScoring scoring={article.escapeRoomScoring} />
+      ) : null}
       {related.length ? (
         <aside className="space-y-8">
           <div>

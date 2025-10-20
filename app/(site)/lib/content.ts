@@ -207,7 +207,9 @@ function normaliseArticle(page: any): Article | null {
     tags: Array.isArray(page?.tags) ? page.tags : undefined,
     publishedAt: page?.publishedAt ?? page?.date ?? undefined,
     readingTime: page?.readingTime ?? page?.meta?.readingTime ?? undefined,
-    sections: normaliseSections(page)
+    sections: normaliseSections(page),
+    escapeRoomGeneralData: page?.escapeRoomGeneralData ?? undefined,
+    escapeRoomScoring: page?.escapeRoomScoring ?? undefined
   };
 }
 

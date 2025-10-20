@@ -1107,6 +1107,9 @@ function extractImageSources(html) {
 }
 
 function pruneEmpty(record) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    return record;
+  }
   return Object.fromEntries(
     Object.entries(record).filter(([, value]) => {
       if (value === null || value === undefined) return false;
@@ -1454,6 +1457,7 @@ async function run(cliOptions) {
     }, cliOptions);
   } catch (error) {
     console.error('No se pudo formatear el export:', error.message);
+    console.error('Stack trace:', error.stack);
     process.exitCode = 1;
   }
 }

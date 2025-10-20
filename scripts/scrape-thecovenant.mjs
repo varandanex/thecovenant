@@ -327,7 +327,7 @@ function extractEscapeRoomGeneralData($, pageUrl) {
     if (!label) return;
     if (labelNorm.includes('categoria') || labelNorm.includes('categoría')) {
       info.category = valueText || null;
-    } else if (label.includes('provincia')) {
+    } else if (labelNorm.includes('provincia')) {
       info.province = valueText || null;
     } else if (labelNorm.includes('duracion') || labelNorm.includes('duración')) {
       info.durationText = valueText || null;
@@ -347,7 +347,7 @@ function extractEscapeRoomGeneralData($, pageUrl) {
           if (onlyNum) info.durationMinutes = parseInt(onlyNum[1], 10);
         }
       }
-    } else if (label.includes('jugadores')) {
+    } else if (labelNorm.includes('jugadores')) {
       info.playersText = valueText || null;
       const rangeMatch = valueText.toLowerCase().match(/(\d+)\s*-\s*(\d+)/);
       if (rangeMatch) {
@@ -360,7 +360,7 @@ function extractEscapeRoomGeneralData($, pageUrl) {
           info.maxPlayers = info.minPlayers;
         }
       }
-    } else if (label.startsWith('web')) {
+    } else if (labelNorm.startsWith('web')) {
       const a = valueCell.find('a[href]').first();
       if (a.length) {
         info.webLink = toAbsoluteUrl(a.attr('href'), pageUrl);

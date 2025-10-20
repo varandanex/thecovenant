@@ -14,6 +14,34 @@ export type ContentSection =
       html: string;
     };
 
+export type EscapeRoomGeneralData = {
+  category?: string;
+  province?: string;
+  durationText?: string;
+  durationMinutes?: number;
+  playersText?: string;
+  minPlayers?: number;
+  maxPlayers?: number;
+  webLink?: string;
+};
+
+export type EscapeRoomScore = {
+  value: number;
+  max: number;
+  ratio: number;
+  label: string;
+};
+
+export type EscapeRoomScoring = {
+  difficulty?: EscapeRoomScore;
+  terror?: EscapeRoomScore;
+  immersion?: EscapeRoomScore;
+  fun?: EscapeRoomScore;
+  puzzles?: EscapeRoomScore;
+  gameMaster?: EscapeRoomScore;
+  global?: EscapeRoomScore;
+};
+
 export type Article = {
   slug: string;
   title: string;
@@ -28,6 +56,8 @@ export type Article = {
   publishedAt?: string;
   readingTime?: string;
   sections: ContentSection[];
+  escapeRoomGeneralData?: EscapeRoomGeneralData;
+  escapeRoomScoring?: EscapeRoomScoring;
 };
 
 export type Navigation = {
