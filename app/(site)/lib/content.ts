@@ -559,7 +559,14 @@ export async function getSiteContentAsync(): Promise<SiteContent> {
 }
 
 export async function getNavigationAsync(): Promise<Navigation> {
-  return (await getContentAsync()).navigation;
+  const navigation = (await getContentAsync()).navigation;
+  const rankingLink = { label: "Ranking", href: "/ranking-escape-rooms" };
+  const hasRankingLink = navigation.primary.some((item) => item.href === rankingLink.href);
+
+  return {
+    primary: hasRankingLink ? navigation.primary : [...navigation.primary, rankingLink],
+    secondary: navigation.secondary
+  };
 }
 
 export async function getHeroAsync() {

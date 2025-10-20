@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+
 import { EscapeRoomRanking } from "../components/escape-room-ranking";
 import { escapeRoomRanking, getRankingStats } from "../lib/ranking-data";
 
@@ -11,10 +12,12 @@ export const metadata: Metadata = {
     description:
       "Explora las mejores experiencias inmersivas con valoración global, métricas de inmersión, narrativa y puzles. Filtra por provincia o estudio y encuentra tu próxima misión.",
     type: "website"
+
   }
 };
 
 export default function RankingEscapeRoomsPage() {
+
   const stats = getRankingStats(escapeRoomRanking);
   const topThree = [...escapeRoomRanking].sort((a, b) => b.rating - a.rating).slice(0, 3);
 
@@ -145,6 +148,6 @@ export default function RankingEscapeRoomsPage() {
           y adjunta referencias, dossier de prensa o vídeos del montaje. Actualizamos los listados al cierre de cada trimestre.
         </p>
       </section>
-    </div>
+
   );
 }
