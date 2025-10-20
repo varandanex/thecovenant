@@ -26,6 +26,18 @@ Proyecto moderno para relanzar [www.thecovenant.es](https://www.thecovenant.es/)
 - **Producción**: Vercel para el frontend (con `NEXT_PRIVATE_SUPABASE_SERVICE_ROLE_KEY` gestionada como secret) y Supabase Cloud para la base de datos.
 - **Automatización**: configurar webhooks de Supabase (o scripts administrativos) para disparar revalidaciones en la ruta `/api/revalidate` cuando se publique contenido.
 
+## Prisma + sincronización incremental
+- El esquema vive en `prisma/schema.prisma` y se versiona con migraciones SQL (`prisma/migrations/000_init`). Prisma está configurado en modo `relationMode = "prisma"` para convivir bien con Supabase.
+- Variables nuevas:
+  - `DATABASE_URL`: cadena de conexión de Supabase (usa la URL de servicio para operaciones de escritura).
+  - `CONTENT_SOURCE`: define la prioridad de lectura en `app/(site)/lib/content.ts`. Usa `database` para forzar Prisma o `file` para mantener el export JSON aunque exista `DATABASE_URL`.
+  - `USE_DATABASE_CONTENT`: flag (`true/false`) para activar Prisma sin tocar `CONTENT_SOURCE` (útil en staging).
+- Flujos principales:
+  1. Ejecuta `npm run scrapefull` o `npm run format-export` para regenerar `thecovenant-export-formatted.json`.
+  2. Lanza `npm run content:sync` (alias de `node scripts/sync-content-to-db.mjs`) para aplicar diffs en Supabase. El script calcula checksums por artículo, crea revisiones en `article_revisions` y limpia los slugs que ya no existen en el export.
+  3. Aplica migraciones con `npm run db:migrate` en entornos controlados o `npm run db:push` durante el desarrollo inicial.
+- `app/(site)/lib/content.ts` consulta la base de datos cuando el flag anterior está activo y cae al export JSON en caso de fallo. Así Next.js sigue funcionando aunque Supabase esté caído.
+
 ## Recursos útiles
 
 ## Nota: mejorar tiempos de arranque en desarrollo
@@ -52,3 +64,4 @@ Para medir: ejecuta `time npm run dev` antes y después de los cambios y compara
   - metadatos en `source` sobre la sesión de crawling;
   - cada página dentro de `pages`, con una lista `sourceUrls` que conserva las variantes originales de la URL;
   - un bloque `assets` con ficheros descargados (por ejemplo imágenes) y sus cabeceras HTTP cuando hay material disponible.
+- `npm run content:sync`: ingiere el export formateado en Supabase mediante Prisma, crea revisiones y sincroniza navegación/destacados.

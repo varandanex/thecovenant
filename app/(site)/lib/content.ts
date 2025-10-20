@@ -1,6 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { Article, ContentSection, Navigation, SiteContent } from "./types";
+import prisma from "./prisma";
+import type {
+  Article,
+  ContentSection,
+  EscapeRoomGeneralData,
+  EscapeRoomScoring,
+  Navigation,
+  SiteContent
+} from "./types";
 
 const EXPORT_FILENAME = "thecovenant-export-formatted.json";
 const CONTENT_EXPORT_URL = process.env.CONTENT_EXPORT_URL ?? process.env.NEXT_PUBLIC_CONTENT_EXPORT_URL ?? null;
@@ -17,6 +25,11 @@ const LOCAL_EXPORT_PATHS = Array.from(
 
 let cachedContent: SiteContent | null = null;
 let loadedOnce = false;
+
+const contentSource = (process.env.CONTENT_SOURCE ?? "").toLowerCase();
+const DATABASE_CONTENT_ENABLED =
+  contentSource === "database" ||
+  (contentSource !== "file" && (process.env.USE_DATABASE_CONTENT === "true" || Boolean(process.env.DATABASE_URL)));
 
 /**
  * Convierte URLs de imágenes externas a rutas locales si la imagen fue descargada.
@@ -40,6 +53,10 @@ function normalizeImageUrl(url: string): string {
     // Si no es una URL válida, devolver tal cual
   }
   return url;
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normaliseSections(entry: any): ContentSection[] {
@@ -290,8 +307,136 @@ function buildSiteContent(raw: any): SiteContent | null {
   };
 }
 
+async function loadContentFromDatabase(): Promise<SiteContent | null> {
+  if (!DATABASE_CONTENT_ENABLED) {
+    return null;
+  }
+
+  try {
+    const [settings, articles] = await Promise.all([
+      prisma.siteSettings.findUnique({ where: { id: "default" } }),
+      prisma.article.findMany({
+        orderBy: [
+          { publishedAt: "desc" },
+          { createdAt: "desc" }
+        ]
+      })
+    ]);
+
+    if (!settings || articles.length === 0) {
+      return null;
+    }
+
+    const heroCandidate = settings.hero as any;
+    const hero =
+      isRecord(heroCandidate) && typeof heroCandidate.title === "string" && typeof heroCandidate.description === "string"
+        ? {
+            title: heroCandidate.title,
+            description: heroCandidate.description,
+            cta:
+              isRecord(heroCandidate.cta) &&
+              typeof heroCandidate.cta.label === "string" &&
+              typeof heroCandidate.cta.href === "string"
+                ? { label: heroCandidate.cta.label, href: heroCandidate.cta.href }
+                : undefined
+          }
+        : fallbackContent.hero;
+
+    const navigationCandidate = settings.navigation as any;
+    const buildNavigationGroup = (group: any): Array<{ label: string; href: string }> => {
+      if (!Array.isArray(group)) {
+        return [];
+      }
+
+      return group
+        .filter((item: unknown): item is { label: string; href: string } =>
+          isRecord(item) && typeof item.label === "string" && typeof item.href === "string"
+        )
+        .map((item) => ({ label: item.label, href: item.href }));
+    };
+
+    const navigation: Navigation = {
+      primary: buildNavigationGroup(navigationCandidate?.primary),
+      secondary: buildNavigationGroup(navigationCandidate?.secondary)
+    };
+
+    if (navigation.primary.length === 0) {
+      navigation.primary = [...fallbackContent.navigation.primary];
+    }
+    if (navigation.secondary.length === 0) {
+      navigation.secondary = [...fallbackContent.navigation.secondary];
+    }
+
+    const normalisedArticles: Article[] = articles.map((article) => {
+      let sections: ContentSection[] = Array.isArray(article.sections)
+        ? (article.sections as ContentSection[])
+        : [];
+
+      if (sections.length === 0) {
+        sections = [{ type: "paragraph", text: "Contenido no disponible temporalmente." }];
+      }
+
+      const escapeRoomGeneralData = isRecord(article.escapeRoomGeneralData)
+        ? (article.escapeRoomGeneralData as EscapeRoomGeneralData)
+        : undefined;
+      const escapeRoomScoring = isRecord(article.escapeRoomScoring)
+        ? (article.escapeRoomScoring as EscapeRoomScoring)
+        : undefined;
+
+      return {
+        slug: article.slug,
+        title: article.title,
+        description: article.description ?? undefined,
+        excerpt: article.excerpt ?? undefined,
+        coverImage: article.coverImageUrl
+          ? {
+              url: normalizeImageUrl(article.coverImageUrl),
+              alt: article.coverImageAlt ?? undefined
+            }
+          : undefined,
+        category: article.category ?? undefined,
+        tags: article.tags.length > 0 ? article.tags : undefined,
+        publishedAt: article.publishedAt ? article.publishedAt.toISOString() : undefined,
+        readingTime: article.readingTime ?? undefined,
+        sections,
+        escapeRoomGeneralData,
+        escapeRoomScoring
+      };
+    });
+
+    if (normalisedArticles.length === 0) {
+      return null;
+    }
+
+    let featured = settings.featuredSlugs.length > 0
+      ? [...settings.featuredSlugs]
+      : normalisedArticles.slice(0, 4).map((article) => article.slug);
+    const highlight = settings.highlightSlug ?? featured[0] ?? normalisedArticles[0].slug;
+
+    if (highlight && !featured.includes(highlight)) {
+      featured = [highlight, ...featured];
+    }
+
+    return {
+      hero,
+      highlight,
+      articles: normalisedArticles,
+      featured,
+      navigation
+    };
+  } catch (error) {
+    console.warn("No se pudo cargar contenido desde la base de datos:", error);
+    return null;
+  }
+}
+
 async function loadExternalContentAsync(): Promise<SiteContent | null> {
   try {
+    const databaseContent = await loadContentFromDatabase();
+    if (databaseContent) {
+      return databaseContent;
+    }
+
     const resolvedUrl = resolveExportUrl(CONTENT_EXPORT_URL);
     const raw =
       (resolvedUrl ? await loadExportFromUrl(resolvedUrl) : null) ?? (await loadExportFromFilesystem());
@@ -349,132 +494,6 @@ async function getContentAsync(): Promise<SiteContent> {
   }
   return cachedContent ?? fallbackContent;
 }
-
-const fallbackContent: SiteContent = {
-  hero: {
-    title: "Una nueva era para The Covenant",
-    description:
-      "Reimaginamos el archivo oscuro del colectivo con un diseño minimalista, inspirado en la estética original y enfocado en la lectura.",
-    cta: { label: "Entrar al archivo", href: "/cronicas" }
-  },
-  highlight: "cronicas/el-umbral",
-  featured: ["cronicas/el-umbral", "experiencias/la-llamada", "noticias/aniversario", "podcast/episodio-ritual"],
-  navigation: {
-    primary: [
-      { label: "Crónicas", href: "/cronicas" },
-      { label: "Experiencias", href: "/experiencias" },
-      { label: "Noticias", href: "/noticias" },
-      { label: "Podcast", href: "/podcast" }
-    ],
-    secondary: [
-      { label: "Newsletter", href: "/newsletter" },
-      { label: "Contacto", href: "/contacto" },
-      { label: "Colabora", href: "/colabora" }
-    ]
-  },
-  articles: [
-    {
-      slug: "cronicas/el-umbral",
-      title: "Crónica: El Umbral",
-      description: "Los susurros que se filtran desde la habitación sellada del convento abandonado.",
-      excerpt:
-        "La noche en que abrimos El Umbral aprendimos que algunos acertijos no quieren ser resueltos. Esta es la bitácora de aquella incursión.",
-      coverImage: {
-        url: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80",
-        alt: "Pasillo oscuro iluminado por luces violetas"
-      },
-      category: "Crónicas",
-      tags: ["investigación", "horror"],
-      publishedAt: "2023-10-12",
-      readingTime: "8 min",
-      sections: [
-        {
-          type: "paragraph",
-          text: "Entramos pasada la medianoche. Las cámaras infrarrojas revelaban siluetas que no debían estar allí y las claves encontradas en el archivo antiguo se reordenaban solas sobre la mesa."
-        },
-        {
-          type: "quote",
-          text: "El Umbral no es una puerta, es un trato."
-        },
-        {
-          type: "paragraph",
-          text: "Documentamos cada paso con grabadoras analógicas y un mapa trazado a mano. Los símbolos coincidían con los de la web original, confirmando la conexión con los relatos de The Covenant."
-        }
-      ]
-    },
-    {
-      slug: "experiencias/la-llamada",
-      title: "Experiencia: La llamada",
-      description: "Un recorrido telefónico por voces que no pertenecen a nuestro tiempo.",
-      excerpt:
-        "Durante 45 minutos respondemos a una serie de llamadas que reconstruyen la desaparición de un iniciad@. Cada llamada abre una capa más profunda de la historia.",
-      coverImage: {
-        url: "https://images.unsplash.com/photo-1526378722484-bd91ca387e72?auto=format&fit=crop&w=1200&q=80",
-        alt: "Cabina telefónica iluminada en morado"
-      },
-      category: "Experiencias",
-      tags: ["juego", "audio"],
-      publishedAt: "2024-02-05",
-      readingTime: "6 min",
-      sections: [
-        {
-          type: "paragraph",
-          text: "Los participantes reciben instrucciones codificadas en la web original. Cada llamada desbloquea fragmentos de audio y pistas que deben interpretar en tiempo real."
-        },
-        {
-          type: "paragraph",
-          text: "El rediseño del front permite destacar la cronología, mostrar mapas interactivos y facilitar la suscripción a futuras sesiones." 
-        }
-      ]
-    },
-    {
-      slug: "noticias/aniversario",
-      title: "Noticias: Séptimo aniversario",
-      description: "Celebramos siete años de investigaciones colectivas.",
-      excerpt:
-        "Lanzamos nuevo archivo digital, calendario de eventos híbridos y un repositorio para colaboradores internacionales.",
-      coverImage: {
-        url: "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=1200&q=80",
-        alt: "Grupo celebrando en un espacio oscuro"
-      },
-      category: "Noticias",
-      tags: ["evento", "comunidad"],
-      publishedAt: "2024-06-01",
-      readingTime: "4 min",
-      sections: [
-        {
-          type: "paragraph",
-          text: "El aniversario se celebrará con una transmisión en directo desde el sancta sanctorum del colectivo. Se presentará el nuevo front construido con Next.js, inspirado en el diseño original."
-        },
-        {
-          type: "paragraph",
-          text: "La comunidad podrá descargar recursos, acceder a la agenda y colaborar en futuros proyectos cross-media." 
-        }
-      ]
-    },
-    {
-      slug: "podcast/episodio-ritual",
-      title: "Podcast: Ritual de apertura",
-      description: "Primer episodio del podcast con testimonios del equipo de campo.",
-      excerpt:
-        "Rescatamos grabaciones inéditas de la investigación sobre el monasterio en ruinas. Disponible en todas las plataformas.",
-      coverImage: {
-        url: "https://images.unsplash.com/photo-1453873531674-2151bcd01707?auto=format&fit=crop&w=1200&q=80",
-        alt: "Grabadora antigua con luces moradas"
-      },
-      category: "Podcast",
-      tags: ["audio", "entrevista"],
-      publishedAt: "2024-04-18",
-      readingTime: "5 min",
-      sections: [
-        {
-          type: "paragraph",
-          text: "El episodio combina paisajes sonoros originales con entrevistas a los guardianes de archivos. El rediseño destaca los reproductores embebidos y las notas del episodio."
-        }
-      ]
-    }
-  ]
-};
 
 function getContent(): SiteContent {
   if (cachedContent) {

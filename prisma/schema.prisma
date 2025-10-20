@@ -1,0 +1,58 @@
+// schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider     = "sqlite"
+  url          = env("DATABASE_URL")
+}
+
+model Article {
+  id                     String   @id @default(cuid())
+  slug                   String   @unique
+  title                  String
+  description            String?
+  excerpt                String?
+  coverImageUrl          String?  @map("cover_image_url")
+  coverImageAlt          String?  @map("cover_image_alt")
+  category               String?
+  tags                   String   @default("[]")
+  publishedAt            DateTime? @map("published_at")
+  readingTime            String?   @map("reading_time")
+  sections               String
+  escapeRoomGeneralData  String?    @map("escape_room_general_data")
+  escapeRoomScoring      String?    @map("escape_room_scoring")
+  contentHash            String?  @map("content_hash")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  revisions ArticleRevision[]
+
+  @@map("articles")
+}
+
+model ArticleRevision {
+  id        String   @id @default(cuid())
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  articleId String   @map("article_id")
+  checksum  String   @map("checksum")
+  data      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([articleId])
+  @@map("article_revisions")
+}
+
+model SiteSettings {
+  id            String   @id
+  hero          String
+  highlightSlug String?  @map("highlight_slug")
+  featuredSlugs String   @default("[]") @map("featured_slugs")
+  navigation    String
+  contentHash   String?  @map("content_hash")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("site_settings")
+}
