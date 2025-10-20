@@ -3,16 +3,23 @@ import { ArticleCard } from "../components/article-card";
 
 export async function ArticlesMosaic() {
   const articles = await getAllArticlesAsync();
-  const grouped = articles.reduce<Record<string, typeof articles>>((acc, article) => {
+  const grouped = articles
+    .filter((article) => article.category?.toLowerCase() !== "eventos")
+    .reduce<Record<string, typeof articles>>((acc, article) => {
     const key = article.category ?? "Archivo";
     acc[key] = acc[key] ?? [];
     acc[key].push(article);
     return acc;
-  }, {});
+    }, {});
+  const entries = Object.entries(grouped);
+
+  if (entries.length === 0) {
+    return null;
+  }
 
   return (
     <section className="space-y-16">
-      {Object.entries(grouped).map(([category, items]) => (
+      {entries.map(([category, items]) => (
         <div key={category} className="space-y-8">
           <div>
             <span className="text-xs uppercase tracking-[0.4em] text-primary/80">{category}</span>

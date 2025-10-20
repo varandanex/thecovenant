@@ -65,6 +65,7 @@ const fallbackContent: SiteContent = {
     primary: [
       { label: "Crónicas", href: "/cronicas" },
       { label: "Experiencias", href: "/experiencias" },
+      { label: "Eventos", href: "/eventos" },
       { label: "Ranking", href: "/ranking-escape-rooms" },
       { label: "Noticias", href: "/noticias" },
       { label: "Podcast", href: "/podcast" }
@@ -76,6 +77,20 @@ const fallbackContent: SiteContent = {
     ]
   }
 };
+
+const EVENT_PRIMARY_SLUGS = new Set([
+  "the-covenant-cases",
+  "games-university",
+  "gymkhana-literaria-litcon-madrid"
+]);
+
+function isEventSlug(slug: string | undefined): boolean {
+  if (!slug) {
+    return false;
+  }
+  const root = slug.split("/")[0];
+  return EVENT_PRIMARY_SLUGS.has(root);
+}
 
 /**
  * Convierte URLs de imágenes externas a rutas locales si la imagen fue descargada.
@@ -238,6 +253,11 @@ function normaliseArticle(page: any): Article | null {
   }
 
   const normalisedSlug = slugCandidate.replace(/^https?:\/\/(www\.)?thecovenant\.es\//, "").replace(/^\//, "");
+  const isEvent = isEventSlug(normalisedSlug);
+
+  const fallbackParagraph = Array.isArray(page?.paragraphs)
+    ? page.paragraphs.find((paragraph: unknown) => typeof paragraph === "string" && paragraph.trim().length > 0)
+    : undefined;
 
   // Normalizar coverImage desde múltiples fuentes posibles
   let coverImage: { url: string; alt?: string } | undefined = undefined;
@@ -260,14 +280,28 @@ function normaliseArticle(page: any): Article | null {
     }
   }
 
+  const baseTags = Array.isArray(page?.tags) ? page.tags : undefined;
+  const tags = (() => {
+    if (!baseTags && !isEvent) {
+      return undefined;
+    }
+    const tagSet = new Set(Array.isArray(baseTags) ? baseTags : []);
+    if (isEvent) {
+      tagSet.add("eventos");
+    }
+    return tagSet.size > 0 ? Array.from(tagSet) : undefined;
+  })();
+
+  const category = page?.category ?? page?.section ?? (isEvent ? "Eventos" : undefined);
+
   return {
     slug: normalisedSlug.length === 0 ? "" : normalisedSlug,
     title: page?.title ?? page?.metaTitle ?? "Sin título",
-    description: page?.description ?? page?.excerpt,
-    excerpt: page?.excerpt ?? page?.description,
+    description: page?.description ?? page?.excerpt ?? fallbackParagraph,
+    excerpt: page?.excerpt ?? page?.description ?? fallbackParagraph,
     coverImage,
-    category: page?.category ?? page?.section ?? undefined,
-    tags: Array.isArray(page?.tags) ? page.tags : undefined,
+    category,
+    tags,
     publishedAt: page?.publishedAt ?? page?.date ?? undefined,
     readingTime: page?.readingTime ?? page?.meta?.readingTime ?? undefined,
     sections: normaliseSections(page),
@@ -326,6 +360,7 @@ function buildSiteContent(raw: any): SiteContent | null {
       : [
           { label: "Crónicas", href: "/cronicas" },
           { label: "Experiencias", href: "/experiencias" },
+          { label: "Eventos", href: "/eventos" },
           { label: "Ranking", href: "/ranking-escape-rooms" },
           { label: "Noticias", href: "/noticias" },
           { label: "Podcast", href: "/podcast" }
@@ -562,9 +597,28 @@ export async function getNavigationAsync(): Promise<Navigation> {
   const navigation = (await getContentAsync()).navigation;
   const rankingLink = { label: "Ranking", href: "/ranking-escape-rooms" };
   const hasRankingLink = navigation.primary.some((item) => item.href === rankingLink.href);
+  const eventsLink = { label: "Eventos", href: "/eventos" };
+  const hasEventsLink = navigation.primary.some(
+    (item) => item.href === eventsLink.href || item.label.toLowerCase() === eventsLink.label.toLowerCase()
+  );
+
+  const primary = [...navigation.primary];
+
+  if (!hasRankingLink) {
+    primary.push(rankingLink);
+  }
+
+  if (!hasEventsLink) {
+    const experienciasIndex = primary.findIndex((item) => item.label.toLowerCase() === "experiencias");
+    if (experienciasIndex >= 0) {
+      primary.splice(experienciasIndex + 1, 0, eventsLink);
+    } else {
+      primary.push(eventsLink);
+    }
+  }
 
   return {
-    primary: hasRankingLink ? navigation.primary : [...navigation.primary, rankingLink],
+    primary,
     secondary: navigation.secondary
   };
 }

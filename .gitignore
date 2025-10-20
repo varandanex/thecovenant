@@ -43,3 +43,7 @@ data/images/
 
 # Ignorar los exports generados por el scraper (ej: data/exports/)
 /data/exports/
+
+# Base de datos SQLite local (Prisma) - no debe versionarse
+prisma/dev.db
+prisma/dev.db-journal

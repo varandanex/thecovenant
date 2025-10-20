@@ -19,6 +19,35 @@ const IMAGE_CONCURRENCY = Number.parseInt(process.env.SCRAPE_IMAGE_CONCURRENCY |
 const MAX_IMAGE_BYTES = Number.parseInt(process.env.SCRAPE_MAX_IMAGE_BYTES || '', 10) || 5 * 1024 * 1024; // 5MB límite por imagen
 const IMAGE_EXT_WHITELIST = (process.env.SCRAPE_IMAGE_EXTS || 'jpg,jpeg,png,webp,avif,gif').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
+const DEFAULT_EXTRA_SEEDS = [
+  'https://www.thecovenant.es/the-covenant-cases',
+  'https://www.thecovenant.es/games-university',
+  'https://www.thecovenant.es/gymkhana-literaria-litcon-madrid'
+];
+
+function buildExtraSeedList() {
+  const rawEnv = process.env.SCRAPE_EXTRA_SEEDS;
+  const candidates = new Set(DEFAULT_EXTRA_SEEDS);
+  if (typeof rawEnv === 'string' && rawEnv.trim().length > 0) {
+    rawEnv
+      .split(',')
+      .map(entry => entry.trim())
+      .filter(Boolean)
+      .forEach(entry => candidates.add(entry));
+  }
+
+  const normalized = new Set();
+  for (const candidate of candidates) {
+    const absolute = toAbsoluteUrl(candidate, DEFAULT_START_URL);
+    if (!absolute) continue;
+    const canonical = normalizeUrl(absolute, DEFAULT_START_URL) || absolute;
+    normalized.add(canonical);
+  }
+  return Array.from(normalized);
+}
+
+const EXTRA_SEED_URLS = buildExtraSeedList();
+
 const axiosClient = axios.create({
   timeout: REQUEST_TIMEOUT,
   headers: {
@@ -651,6 +680,12 @@ async function discoverSeedUrls(startUrl) {
   const pageSeeds = new Set();
   if (normalizedStart) {
     pageSeeds.add(normalizedStart);
+  }
+  for (const extraSeed of EXTRA_SEED_URLS) {
+    const normalized = normalizeUrl(extraSeed, startUrl);
+    if (normalized) {
+      pageSeeds.add(normalized);
+    }
   }
   if (!INCLUDE_SITEMAPS) {
     return { pageSeeds: Array.from(pageSeeds), sitemapSeeds: [] };

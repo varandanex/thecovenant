@@ -142,6 +142,20 @@ function normaliseSections(entry) {
   return sections;
 }
 
+const EVENT_PRIMARY_SLUGS = new Set([
+  "the-covenant-cases",
+  "games-university",
+  "gymkhana-literaria-litcon-madrid"
+]);
+
+function isEventSlug(slug) {
+  if (typeof slug !== "string" || slug.length === 0) {
+    return false;
+  }
+  const root = slug.split("/")[0];
+  return EVENT_PRIMARY_SLUGS.has(root);
+}
+
 function normaliseArticle(page) {
   const slugCandidate = page?.slug ?? page?.path ?? page?.url;
   if (!slugCandidate || typeof slugCandidate !== "string") {
@@ -149,6 +163,10 @@ function normaliseArticle(page) {
   }
 
   const normalisedSlug = slugCandidate.replace(/^https?:\/\/(www\.)?thecovenant\.es\//, "").replace(/^\//, "");
+  const isEvent = isEventSlug(normalisedSlug);
+  const fallbackParagraph = Array.isArray(page?.paragraphs)
+    ? page.paragraphs.find((paragraph) => typeof paragraph === "string" && paragraph.trim().length > 0)
+    : undefined;
 
   let coverImage;
 
@@ -170,14 +188,28 @@ function normaliseArticle(page) {
     }
   }
 
+  const baseTags = Array.isArray(page?.tags) ? page.tags : undefined;
+  const tags = (() => {
+    if (!baseTags && !isEvent) {
+      return undefined;
+    }
+    const tagSet = new Set(Array.isArray(baseTags) ? baseTags : []);
+    if (isEvent) {
+      tagSet.add("eventos");
+    }
+    return tagSet.size > 0 ? Array.from(tagSet) : undefined;
+  })();
+
+  const category = page?.category ?? page?.section ?? (isEvent ? "Eventos" : undefined);
+
   return {
     slug: normalisedSlug.length === 0 ? "" : normalisedSlug,
     title: page?.title ?? page?.metaTitle ?? "Sin título",
-    description: page?.description ?? page?.excerpt,
-    excerpt: page?.excerpt ?? page?.description,
+    description: page?.description ?? page?.excerpt ?? fallbackParagraph,
+    excerpt: page?.excerpt ?? page?.description ?? fallbackParagraph,
     coverImage,
-    category: page?.category ?? page?.section ?? undefined,
-    tags: Array.isArray(page?.tags) ? page.tags : undefined,
+    category,
+    tags,
     publishedAt: page?.publishedAt ?? page?.date ?? undefined,
     readingTime: page?.readingTime ?? page?.meta?.readingTime ?? undefined,
     sections: normaliseSections(page),
@@ -207,6 +239,7 @@ function buildSiteContent(raw) {
       : [
           { label: "Crónicas", href: "/cronicas" },
           { label: "Experiencias", href: "/experiencias" },
+          { label: "Eventos", href: "/eventos" },
           { label: "Noticias", href: "/noticias" },
           { label: "Podcast", href: "/podcast" }
         ],

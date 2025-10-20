@@ -22,6 +22,12 @@ const STOP_HEADING_PATTERNS = [
   'twitch'
 ];
 
+const EVENT_SLUGS = new Set([
+  'the-covenant-cases',
+  'games-university',
+  'gymkhana-literaria-litcon-madrid'
+]);
+
 async function ensureDir(dirPath) {
   await mkdir(dirPath, { recursive: true });
 }
@@ -518,7 +524,7 @@ function collectJsonLdTypes(jsonLd = []) {
 
 function inferPageType(page) {
   const url = page?.url ?? page?.sourceUrl ?? null;
-  const parts = extractPathPartsFromUrl(url);
+  const parts = extractPathPartsFromUrl(url).map(part => part.toLowerCase());
   const title = (page?.title ?? '').toLowerCase();
   const types = collectJsonLdTypes(page?.jsonLd ?? []);
 
@@ -528,6 +534,8 @@ function inferPageType(page) {
   if (types.has('review') || types.has('criticreview')) return 'review';
   if (types.has('blogposting')) return parts.length > 1 ? 'blogPost' : 'article';
   if (types.has('article')) return parts.length > 1 ? 'article' : 'page';
+
+  if (parts.length > 0 && EVENT_SLUGS.has(parts[0])) return 'event';
 
   if (parts.length === 0) return 'landing';
 
@@ -549,6 +557,10 @@ function deriveTags(page, type, pathParts) {
   if (type === 'blogPost' || type === 'blogIndex') tags.add('blog');
   if (type === 'escapeRoomReview' || type === 'review') tags.add('review');
   if (page?.escapeRoomScoring || type === 'escapeRoomReview') tags.add('escape-room');
+  if (type === 'event') {
+    tags.add('eventos');
+    tags.add('event');
+  }
   if (Array.isArray(pathParts) && pathParts.length > 1) {
     pathParts.slice(0, -1).forEach(part => {
       const slug = slugifySegment(part);
@@ -1139,8 +1151,13 @@ function formatPage(page, options = {}) {
 
   const wordCount = paragraphs.reduce((total, paragraph) => total + paragraph.split(/\s+/).filter(Boolean).length, 0);
   const { url, sourceUrl } = normalizePageUrl(page, options.primaryUrl);
+  const slugParts = extractPathPartsFromUrl(url ?? sourceUrl ?? '').map(part => part.toLowerCase());
 
   const headings = flattenOutline(getOutlineFromPage(page));
+  const metaDescription = normalizeWhitespace(page?.metaDescription);
+  const leadParagraph = paragraphs[0] ?? null;
+  const description = metaDescription ?? leadParagraph ?? null;
+  const excerpt = leadParagraph ?? metaDescription ?? null;
   
   // Select cover image BEFORE simplifying images to have access to full src URLs
   const { featuredImage, gallery } = selectImages(filteredImages, page?.meta);
@@ -1162,7 +1179,9 @@ function formatPage(page, options = {}) {
     fetchedAt: page?.fetchedAt ?? null,
     contentType: page?.contentType ?? null,
     title: normalizeWhitespace(page?.title),
-    metaDescription: normalizeWhitespace(page?.metaDescription),
+    metaDescription,
+    description,
+    excerpt,
     language: getLanguageFromPage(page),
     wordCount: wordCount || null,
     readingTimeMinutes: estimateReadingTime(wordCount),
@@ -1179,6 +1198,15 @@ function formatPage(page, options = {}) {
     isEscapeRoomReview: page?.isEscapeRoomReview ?? null,
     meta: page?.meta ?? null
   };
+
+  if (slugParts.length > 0 && EVENT_SLUGS.has(slugParts[0])) {
+    payload.category = 'Eventos';
+    payload.section = 'Eventos';
+    const eventTags = new Set(Array.isArray(payload.tags) ? payload.tags : []);
+    eventTags.add('eventos');
+    eventTags.add('event');
+    payload.tags = Array.from(eventTags);
+  }
 
   return pruneEmpty(payload);
 }
