@@ -64,6 +64,15 @@ export default async function ArticlePage({ params }: { params: { slug?: string[
           </div>
         ) : null}
       </header>
+      {article.coverImage ? (
+        <figure className="overflow-hidden rounded-3xl">
+          <img
+            src={article.coverImage.url}
+            alt={article.coverImage.alt ?? article.title}
+            className="h-auto w-full object-cover"
+          />
+        </figure>
+      ) : null}
       <RichContent sections={article.sections} />
       {related.length ? (
         <aside className="space-y-8">

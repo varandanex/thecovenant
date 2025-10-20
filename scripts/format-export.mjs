@@ -589,8 +589,15 @@ function selectImages(images = []) {
     return { featuredImage: null, gallery: null };
   }
   const [first, ...rest] = valid;
+  
+  // Normalizar formato de imagen destacada: usar 'url' en lugar de 'src' para compatibilidad
+  const featuredImage = first ? {
+    url: first.src,
+    alt: first.alt ?? null
+  } : null;
+  
   return {
-    featuredImage: first ?? null,
+    featuredImage: pruneEmpty(featuredImage),
     gallery: rest.length ? rest : null
   };
 }
@@ -741,6 +748,95 @@ function simplifySections(sections = []) {
       return pruneEmpty(data);
     })
     .filter(section => Object.keys(section).length > 0);
+}
+
+function buildContentSections(blocks = [], pageUrl = null) {
+  const sections = [];
+  
+  for (const block of blocks) {
+    const tag = typeof block?.tag === 'string' ? block.tag.toLowerCase() : null;
+    
+    // Skip breadcrumbs
+    if (isBreadcrumbBlock(block)) continue;
+    
+    // Skip blocks we want to stop at
+    if (shouldStopAtBlock(block)) break;
+    
+    // Headings (h1-h6)
+    if (isHeadingTag(tag)) {
+      const text = normalizeWhitespace(block?.text);
+      if (text) {
+        sections.push({
+          type: 'heading',
+          text
+        });
+      }
+      continue;
+    }
+    
+    // Check if paragraph contains an image (common pattern: <p><img .../>caption text</p>)
+    if (tag === 'p' && block?.html) {
+      const imgMatch = /<img[^>]*src=["']([^"']+)["'][^>]*alt=["']([^"']*)["'][^>]*>/i.exec(block.html);
+      if (imgMatch) {
+        const imageUrl = toAbsoluteUrl(imgMatch[1], pageUrl);
+        const alt = imgMatch[2] || null;
+        // Extract caption text (text after the img tag)
+        const captionMatch = block.html.replace(/<img[^>]*>/i, '').trim();
+        const caption = normalizeWhitespace(stripHtml(captionMatch)) || null;
+        
+        if (imageUrl) {
+          sections.push(pruneEmpty({
+            type: 'image',
+            url: imageUrl,
+            alt: normalizeWhitespace(alt) || null,
+            caption
+          }));
+          continue;
+        }
+      }
+    }
+    
+    // Paragraphs (p, blockquote)
+    if ((tag === 'p' || tag === 'blockquote') && block?.text) {
+      const text = normalizeWhitespace(block.text);
+      if (text) {
+        sections.push({
+          type: tag === 'blockquote' ? 'quote' : 'paragraph',
+          text
+        });
+      }
+      continue;
+    }
+    
+    // Images (figure or img)
+    if (tag === 'figure' && block?.image) {
+      const imageUrl = toAbsoluteUrl(block.image.src, pageUrl);
+      if (imageUrl) {
+        sections.push(pruneEmpty({
+          type: 'image',
+          url: imageUrl,
+          alt: normalizeWhitespace(block.image.alt) || null,
+          caption: normalizeWhitespace(block.caption) || null
+        }));
+      }
+      continue;
+    }
+    
+    // Lists as paragraphs
+    if ((tag === 'ul' || tag === 'ol') && Array.isArray(block?.items)) {
+      for (const item of block.items) {
+        const text = normalizeWhitespace(item);
+        if (text) {
+          sections.push({
+            type: 'paragraph',
+            text
+          });
+        }
+      }
+    }
+  }
+  
+  return sections;
 }
 
 function isHeadingTag(tag) {
@@ -1005,7 +1101,15 @@ function formatPage(page, options = {}) {
   const images = simplifyImages(filteredImages);
   const links = categorizeLinks(filteredLinks);
   const jsonLd = summarizeJsonLd(getJsonLdFromPage(page));
-  const sections = simplifySections(getSectionsFromPage(page));
+  
+  // Generate content sections from blocks (paragraphs, headings, images, etc.)
+  const contentSections = buildContentSections(mainBlocks, url);
+  
+  // Keep legacy sections for compatibility
+  const legacySections = simplifySections(getSectionsFromPage(page));
+  
+  // Select cover image (first image in content)
+  const { featuredImage } = selectImages(images);
 
   const payload = {
     url,
@@ -1018,9 +1122,10 @@ function formatPage(page, options = {}) {
     language: getLanguageFromPage(page),
     wordCount: wordCount || null,
     readingTimeMinutes: estimateReadingTime(wordCount),
+    coverImage: featuredImage,
     contentHtml,
     headings,
-    sections,
+    sections: contentSections.length > 0 ? contentSections : legacySections,
     paragraphs,
     images,
     links,
