@@ -13,9 +13,13 @@ Preferencia de idioma: los agentes de código deben responder por defecto en esp
 
 - `npm run scrape`: Ejecuta el scraper. Se pueden aplicar variables de entorno para anular valores por defecto (`SCRAPE_START_URL`, `SCRAPE_MAX_PAGES`, etc.).
 
+- `npm run scrape:sync`: **Scraping completo con sincronización automática a base de datos**. Ejecuta scraper → formateador → sync a Supabase en un solo paso. Usa upsert (actualiza si existe, crea si no) para evitar duplicados.
+
 - `npm run scrapefull`: Orquesta `scrape-thecovenant.mjs` y `format-export.mjs`, imprimiendo los exports generados.
 
 - `npm run format-export`: Normaliza `data/thecovenant-export.json` y genera `data/thecovenant-export-formatted.json`.
+
+- `npm run content:sync`: Sincroniza el export formateado a Supabase usando Prisma. Aplica upsert por slug, actualiza checksums y crea revisiones.
 
 - `npm test` / `npm run test:unit`: Ejecuta `tests/extract.test.mjs`.
 
@@ -39,5 +43,5 @@ Preferencia de idioma: los agentes de código deben responder por defecto en esp
 
 ## Seguridad y configuración
 
-- Nunca commitear archivos de entorno o secretos (`.env*`). Documentar las variables `SCRAPE_*` necesarias en la descripción del PR cuando se añadan nuevas.
+- Nunca commitear archivos de entorno o secretos (`.env*`). Documentar las variables `SCRAPE_*` y flags de contenido (`CONTENT_SOURCE`, `USE_DATABASE_CONTENT`, `ENABLE_DB`) necesarias en la descripción del PR cuando se añadan nuevas.
 - Al ejecutar el scraper, respetar `robots.txt` del sitio y reducir la concurrencia (`SCRAPE_CONCURRENCY`) antes de apuntar a hosts que no sean de producción.

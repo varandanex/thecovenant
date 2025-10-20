@@ -32,6 +32,7 @@ Proyecto moderno para relanzar [www.thecovenant.es](https://www.thecovenant.es/)
   - `DATABASE_URL`: cadena de conexión de Supabase (usa la URL de servicio para operaciones de escritura).
   - `CONTENT_SOURCE`: define la prioridad de lectura en `app/(site)/lib/content.ts`. Usa `database` para forzar Prisma o `file` para mantener el export JSON aunque exista `DATABASE_URL`.
   - `USE_DATABASE_CONTENT`: flag (`true/false`) para activar Prisma sin tocar `CONTENT_SOURCE` (útil en staging).
+  - `ENABLE_DB`: flag explícito (`true/false`) que fuerza el uso de la base de datos siempre que la `DATABASE_URL` sea válida. Tiene prioridad sobre `USE_DATABASE_CONTENT` y es más claro en despliegues.
 - Flujos principales:
   1. Ejecuta `npm run scrapefull` o `npm run format-export` para regenerar `thecovenant-export-formatted.json`.
   2. Lanza `npm run content:sync` (alias de `node scripts/sync-content-to-db.mjs`) para aplicar diffs en Supabase. El script calcula checksums por artículo, crea revisiones en `article_revisions` y limpia los slugs que ya no existen en el export.
@@ -59,6 +60,7 @@ Para medir: ejecuta `time npm run dev` antes y después de los cambios y compara
 
 ## Herramientas de scraping y limpieza
 - `npm run scrapefull`: ejecuta la orquestación completa (`scrape-thecovenant.mjs` + `format-export.mjs`) y vuelca en consola los exports JSON generados.
+- `npm run scrape:sync`: **ejecuta scraping + formateo + sincronización a base de datos** en un solo comando. Ideal para importar y actualizar contenido directamente en Supabase sin duplicar entradas (usa upsert).
 - `npm run scrape`: ejecuta el scraper original que descarga el contenido del sitio.
 - `npm run format-export`: toma `data/thecovenant-export.json`, simplifica el contenido extraído (textos, encabezados, imágenes, enlaces, schema.org) y genera `data/thecovenant-export-formatted.json` con una estructura más legible. El resultado incluye:
   - metadatos en `source` sobre la sesión de crawling;

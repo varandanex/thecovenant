@@ -192,6 +192,13 @@ async function main() {
   await runNodeScript(path.join('scripts', 'scrape-thecovenant.mjs'), 'scrape-thecovenant');
   await runNodeScript(path.join('scripts', 'format-export.mjs'), 'format-export');
 
+  // Sincronizar a base de datos si está habilitado
+  const syncToDb = (process.env.SCRAPE_SYNC_TO_DB || 'false').toLowerCase() === 'true';
+  if (syncToDb) {
+    console.log('[scrapefull] Sincronizando contenido a base de datos...');
+    await runNodeScript(path.join('scripts', 'sync-content-to-db.mjs'), 'sync-content-to-db');
+  }
+
   // Mostrar los JSONs generados (comportamiento previo)
   await emitJson(path.join('data', 'thecovenant-export.json'), 'Export crudo');
   await emitJson(path.join('data', 'thecovenant-export-formatted.json'), 'Export formateado');

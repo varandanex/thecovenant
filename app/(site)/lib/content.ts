@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import prisma from "./prisma";
+import { parseDbArticle } from "./parse-db-article";
 import type {
   Article,
   ContentSection,
@@ -27,9 +28,43 @@ let cachedContent: SiteContent | null = null;
 let loadedOnce = false;
 
 const contentSource = (process.env.CONTENT_SOURCE ?? "").toLowerCase();
+// Consideramos la URL de base de datos válida si respeta los protocolos soportados
+const rawDbUrl = process.env.DATABASE_URL ?? "";
+const isValidDatabaseUrl = rawDbUrl.startsWith("file:") || rawDbUrl.startsWith("postgresql://") || rawDbUrl.startsWith("postgres://");
+// Para evitar activar Prisma sólo por tener DATABASE_URL definida, exigimos flag explícito
+// - CONTENT_SOURCE=database (fuerza uso BD)
+// - USE_DATABASE_CONTENT=true (activa BD siempre que la URL sea válida)
+// Si CONTENT_SOURCE=file se fuerza el fallback a export JSON aunque haya URL.
+const enableDbFlag = (process.env.ENABLE_DB ?? "").toLowerCase() === "true";
 const DATABASE_CONTENT_ENABLED =
-  contentSource === "database" ||
-  (contentSource !== "file" && (process.env.USE_DATABASE_CONTENT === "true" || Boolean(process.env.DATABASE_URL)));
+  (contentSource === "database" && isValidDatabaseUrl) ||
+  (enableDbFlag && isValidDatabaseUrl) ||
+  (contentSource !== "file" && process.env.USE_DATABASE_CONTENT === "true" && isValidDatabaseUrl);
+
+// Contenido mínimo por defecto para evitar nulls durante el arranque
+const fallbackContent: SiteContent = {
+  hero: {
+    title: "Relatos ocultos, experiencias imposibles",
+    description: "La hermandad de The Covenant recopila investigaciones, crónicas y proyectos de narrativa inmersiva.",
+    cta: { label: "Explorar relatos", href: "/cronicas" }
+  },
+  highlight: "",
+  articles: [],
+  featured: [],
+  navigation: {
+    primary: [
+      { label: "Crónicas", href: "/cronicas" },
+      { label: "Experiencias", href: "/experiencias" },
+      { label: "Noticias", href: "/noticias" },
+      { label: "Podcast", href: "/podcast" }
+    ],
+    secondary: [
+      { label: "Newsletter", href: "/newsletter" },
+      { label: "Contacto", href: "/contacto" },
+      { label: "Colabora", href: "/colabora" }
+    ]
+  }
+};
 
 /**
  * Convierte URLs de imágenes externas a rutas locales si la imagen fue descargada.
@@ -367,42 +402,7 @@ async function loadContentFromDatabase(): Promise<SiteContent | null> {
       navigation.secondary = [...fallbackContent.navigation.secondary];
     }
 
-    const normalisedArticles: Article[] = articles.map((article) => {
-      let sections: ContentSection[] = Array.isArray(article.sections)
-        ? (article.sections as ContentSection[])
-        : [];
-
-      if (sections.length === 0) {
-        sections = [{ type: "paragraph", text: "Contenido no disponible temporalmente." }];
-      }
-
-      const escapeRoomGeneralData = isRecord(article.escapeRoomGeneralData)
-        ? (article.escapeRoomGeneralData as EscapeRoomGeneralData)
-        : undefined;
-      const escapeRoomScoring = isRecord(article.escapeRoomScoring)
-        ? (article.escapeRoomScoring as EscapeRoomScoring)
-        : undefined;
-
-      return {
-        slug: article.slug,
-        title: article.title,
-        description: article.description ?? undefined,
-        excerpt: article.excerpt ?? undefined,
-        coverImage: article.coverImageUrl
-          ? {
-              url: normalizeImageUrl(article.coverImageUrl),
-              alt: article.coverImageAlt ?? undefined
-            }
-          : undefined,
-        category: article.category ?? undefined,
-        tags: article.tags.length > 0 ? article.tags : undefined,
-        publishedAt: article.publishedAt ? article.publishedAt.toISOString() : undefined,
-        readingTime: article.readingTime ?? undefined,
-        sections,
-        escapeRoomGeneralData,
-        escapeRoomScoring
-      };
-    });
+    const normalisedArticles: Article[] = articles.map((article) => parseDbArticle(article));
 
     if (normalisedArticles.length === 0) {
       return null;

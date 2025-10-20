@@ -12,9 +12,11 @@ Preferencia de idioma: los agentes de código deben responder por defecto en esp
 ## Qué necesita saber un agente para ser productivo
 
 - Comandos importantes:
+  - `npm run scrape:sync` — **ejecuta scraping + formateo + sincronización automática a base de datos** en un solo paso; respeta las variables `SCRAPE_*` y guarda directamente en Supabase usando upsert (actualiza si existe, crea si no).
   - `npm run scrapefull` — orquesta el scraper, el formateador y muestra los exports en consola bajo logs `[scrapefull]`; respeta las mismas variables `SCRAPE_*` que los scripts individuales.
   - `npm run scrape` — ejecuta el scraper y luego el formateador (produce `data/thecovenant-export.json`).
   - `npm run format-export` — transforma `data/thecovenant-export.json` a `data/thecovenant-export-formatted.json`.
+  - `npm run content:sync` — sincroniza el export formateado a Supabase sin scraping previo.
   - `npm test` / `npm run test:unit` — ejecuta `tests/extract.test.mjs`.
 
 - Variables de entorno relevantes para el scraper (`scripts/scrape-thecovenant.mjs` y consumidas también por `scrapefull.mjs`):
@@ -66,3 +68,7 @@ Si algo no es evidente (por ejemplo, qué URLs deben considerarse internas/exter
 
 ---
 Por favor revisa este borrador y dime si quieres que añada ejemplos concretos de env vars en comandos, o que incluya una sección de "preguntas frecuentes" para agentes (p. ej. límites de tiempo por request, manejo de robots.txt). 
+
+## Flag adicional para contenido vía BD
+
+`ENABLE_DB=true` fuerza el uso de contenido desde la base de datos siempre que `DATABASE_URL` sea válida (sqlite `file:` o Postgres `postgresql://`). Tiene prioridad sobre `USE_DATABASE_CONTENT` y evita ambigüedad cuando sólo se quiere activar la BD sin cambiar `CONTENT_SOURCE`. Úsalo en combinación con `CONTENT_SOURCE=database` si quieres deshabilitar el fallback a fichero incluso en errores de carga.
