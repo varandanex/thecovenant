@@ -252,6 +252,36 @@ function extractImages($, pageUrl) {
   return images;
 }
 
+// Extrae meta tags importantes (Open Graph, Twitter Card, etc.)
+function extractMetaTags($, pageUrl) {
+  const meta = {
+    description: $('meta[name="description"]').attr('content') || null,
+    keywords: $('meta[name="keywords"]').attr('content') || null,
+    author: $('meta[name="author"]').attr('content') || null,
+    // Open Graph
+    ogTitle: $('meta[property="og:title"]').attr('content') || null,
+    ogDescription: $('meta[property="og:description"]').attr('content') || null,
+    ogImage: $('meta[property="og:image"]').attr('content') || null,
+    ogUrl: $('meta[property="og:url"]').attr('content') || null,
+    ogType: $('meta[property="og:type"]').attr('content') || null,
+    // Twitter Card
+    twitterCard: $('meta[name="twitter:card"]').attr('content') || null,
+    twitterTitle: $('meta[name="twitter:title"]').attr('content') || null,
+    twitterDescription: $('meta[name="twitter:description"]').attr('content') || null,
+    twitterImage: $('meta[name="twitter:image"]').attr('content') || null
+  };
+  
+  // Convertir URLs relativas a absolutas
+  if (meta.ogImage) {
+    meta.ogImage = toAbsoluteUrl(meta.ogImage, pageUrl);
+  }
+  if (meta.twitterImage) {
+    meta.twitterImage = toAbsoluteUrl(meta.twitterImage, pageUrl);
+  }
+  
+  return meta;
+}
+
 // Extrae información estructurada de la ficha de escape room (tabla DATOS GENERALES)
 function extractEscapeRoomGeneralData($, pageUrl) {
   const tables = $('table.tabla-scoring-datos-principales');
@@ -487,13 +517,18 @@ async function processUrl(url) {
   const html = pageResult.data;
   console.log(`[Crawl] ${url} respondió ${pageResult.status}`);
   const $ = cheerio.load(html, { decodeEntities: false });
+  
+  // Extraer meta tags (incluido og:image para imagen destacada)
+  const metaTags = extractMetaTags($, url);
+  
   const pageInfo = {
     url,
     status: pageResult.status,
     fetchedAt: new Date().toISOString(),
     contentType: pageResult.headers?.['content-type'] || null,
     title: $('title').first().text().trim() || null,
-    metaDescription: $('meta[name="description"]').attr('content') || null,
+    metaDescription: metaTags.description,
+    meta: metaTags,
     links: extractLinkTags($, url),
     images: extractImages($, url),
     rawHtml: html

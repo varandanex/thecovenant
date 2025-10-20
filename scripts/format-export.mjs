@@ -583,22 +583,62 @@ function deriveTags(page, type, pathParts) {
   return Array.from(tags);
 }
 
-function selectImages(images = []) {
-  const valid = Array.isArray(images) ? images.filter(image => image?.src) : [];
-  if (!valid.length) {
-    return { featuredImage: null, gallery: null };
-  }
-  const [first, ...rest] = valid;
+function selectImages(images = [], metaTags = {}) {
+  // Priorizar imagen de Twitter Card sobre Open Graph (suele ser la imagen original completa)
+  // Open Graph a veces usa versiones recortadas optimizadas para Facebook
+  let featuredImageUrl = null;
+  let featuredImageAlt = null;
   
-  // Normalizar formato de imagen destacada: usar 'url' en lugar de 'src' para compatibilidad
-  const featuredImage = first ? {
-    url: first.src,
-    alt: first.alt ?? null
-  } : null;
+  if (metaTags?.twitterImage) {
+    featuredImageUrl = metaTags.twitterImage;
+    featuredImageAlt = metaTags.twitterTitle || metaTags.description || null;
+  } else if (metaTags?.ogImage) {
+    featuredImageUrl = metaTags.ogImage;
+    featuredImageAlt = metaTags.ogTitle || metaTags.description || null;
+  }
+  
+  // Si encontramos imagen en meta tags, buscarla en el array de imágenes para obtener más datos
+  let featuredImage = null;
+  if (featuredImageUrl) {
+    const matchingImage = Array.isArray(images) 
+      ? images.find(img => img?.src === featuredImageUrl)
+      : null;
+    
+    if (matchingImage) {
+      featuredImage = {
+        url: matchingImage.src,
+        alt: matchingImage.alt || featuredImageAlt
+      };
+    } else {
+      // Usar la imagen de meta tags aunque no esté en el array de imágenes
+      featuredImage = {
+        url: featuredImageUrl,
+        alt: featuredImageAlt
+      };
+    }
+  }
+  
+  // Si no hay imagen en meta tags, usar la primera imagen del array
+  if (!featuredImage) {
+    const valid = Array.isArray(images) ? images.filter(image => image?.src) : [];
+    if (valid.length) {
+      const first = valid[0];
+      featuredImage = {
+        url: first.src,
+        alt: first.alt ?? null
+      };
+    }
+  }
+  
+  // Para gallery, usar todas las imágenes excepto la featured
+  const valid = Array.isArray(images) ? images.filter(image => image?.src) : [];
+  const gallery = featuredImage 
+    ? valid.filter(img => img.src !== featuredImage.url)
+    : valid.slice(1); // Si no hay featured, usar todas menos la primera
   
   return {
     featuredImage: pruneEmpty(featuredImage),
-    gallery: rest.length ? rest : null
+    gallery: gallery.length ? gallery : null
   };
 }
 
@@ -1098,6 +1138,10 @@ function formatPage(page, options = {}) {
   const { url, sourceUrl } = normalizePageUrl(page, options.primaryUrl);
 
   const headings = flattenOutline(getOutlineFromPage(page));
+  
+  // Select cover image BEFORE simplifying images to have access to full src URLs
+  const { featuredImage, gallery } = selectImages(filteredImages, page?.meta);
+  
   const images = simplifyImages(filteredImages);
   const links = categorizeLinks(filteredLinks);
   const jsonLd = summarizeJsonLd(getJsonLdFromPage(page));
@@ -1107,9 +1151,6 @@ function formatPage(page, options = {}) {
   
   // Keep legacy sections for compatibility
   const legacySections = simplifySections(getSectionsFromPage(page));
-  
-  // Select cover image (first image in content)
-  const { featuredImage } = selectImages(images);
 
   const payload = {
     url,
@@ -1132,7 +1173,8 @@ function formatPage(page, options = {}) {
     jsonLd,
     escapeRoomGeneralData: page?.escapeRoomGeneralData ?? null,
     escapeRoomScoring: page?.escapeRoomScoring ?? null,
-    isEscapeRoomReview: page?.isEscapeRoomReview ?? null
+    isEscapeRoomReview: page?.isEscapeRoomReview ?? null,
+    meta: page?.meta ?? null
   };
 
   return pruneEmpty(payload);
@@ -1167,7 +1209,12 @@ function buildGenericEntry(page, options = {}) {
   const summary = page.metaDescription ?? (Array.isArray(page.paragraphs) ? page.paragraphs[0] ?? null : null);
   const bodyText = Array.isArray(page.paragraphs) ? page.paragraphs.join('\n\n') || null : null;
   const bodyHtml = page.contentHtml ?? null;
-  const { featuredImage, gallery } = selectImages(page.images);
+  
+  // Use coverImage already calculated in formatPage (which uses Open Graph meta tags)
+  const featuredImage = page.coverImage ?? null;
+  // Build gallery from remaining images
+  const gallery = Array.isArray(page.images) && page.images.length > 0 ? page.images : null;
+  
   const tags = deriveTags(page, type, pathParts).map(tag => tag.toLowerCase());
   const profile = buildEscapeRoomProfile(page.escapeRoomGeneralData);
   const scores = buildEscapeRoomScores(page.escapeRoomScoring);
