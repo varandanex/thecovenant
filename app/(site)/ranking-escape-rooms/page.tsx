@@ -12,7 +12,6 @@ export const metadata: Metadata = {
     description:
       "Explora las mejores experiencias inmersivas con valoración global, métricas de inmersión, narrativa y puzles. Filtra por provincia o estudio y encuentra tu próxima misión.",
     type: "website"
-
   }
 };
 
@@ -148,6 +147,6 @@ export default function RankingEscapeRoomsPage() {
           y adjunta referencias, dossier de prensa o vídeos del montaje. Actualizamos los listados al cierre de cada trimestre.
         </p>
       </section>
-
+    </div>
   );
 }
