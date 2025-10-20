@@ -1,8 +1,9 @@
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 import type { Article, ContentSection, Navigation, SiteContent } from "./types";
 
 let cachedContent: SiteContent | null = null;
+let loadedOnce = false;
 
 function normaliseSections(entry: any): ContentSection[] {
   const sections: ContentSection[] = [];
@@ -85,14 +86,17 @@ function normaliseArticle(page: any): Article | null {
   };
 }
 
-function loadExternalContent(): SiteContent | null {
+async function loadExternalContentAsync(): Promise<SiteContent | null> {
   try {
     const filePath = path.join(process.cwd(), "data", "thecovenant-export-formatted.json");
-    if (!fs.existsSync(filePath)) {
+    try {
+      await fs.access(filePath);
+    } catch (err) {
       return null;
     }
 
-    const raw = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    const rawTxt = await fs.readFile(filePath, "utf-8");
+    const raw = JSON.parse(rawTxt);
     const pages = Array.isArray(raw?.pages) ? raw.pages : [];
     const articles = pages
       .map((page: any) => normaliseArticle(page))
@@ -142,6 +146,19 @@ function loadExternalContent(): SiteContent | null {
     console.error("No se pudo cargar el export del scraper:", error);
     return null;
   }
+}
+
+/**
+ * Async getter that loads external content once and caches it.
+ */
+async function getContentAsync(): Promise<SiteContent> {
+  if (cachedContent) return cachedContent;
+  if (!loadedOnce) {
+    const loaded = await loadExternalContentAsync();
+    cachedContent = loaded ?? fallbackContent;
+    loadedOnce = true;
+  }
+  return cachedContent ?? fallbackContent;
 }
 
 const fallbackContent: SiteContent = {
@@ -275,9 +292,9 @@ function getContent(): SiteContent {
     return cachedContent;
   }
 
-  const loaded = loadExternalContent();
-  cachedContent = loaded ?? fallbackContent;
-  return cachedContent;
+  // If external content wasn't loaded yet, return fallback synchronously to avoid blocking imports.
+  // Server components should call the async getters when they need fresh content.
+  return fallbackContent;
 }
 
 export function getSiteContent(): SiteContent {
@@ -312,4 +329,39 @@ export function getAllArticles(): Article[] {
 export function getArticleBySlug(slug: string): Article | undefined {
   const normalised = slug.replace(/^\//, "");
   return getContent().articles.find((article) => article.slug === normalised);
+}
+
+// Async equivalents - prefer these in server components to avoid sync FS reads during import
+export async function getSiteContentAsync(): Promise<SiteContent> {
+  return await getContentAsync();
+}
+
+export async function getNavigationAsync(): Promise<Navigation> {
+  return (await getContentAsync()).navigation;
+}
+
+export async function getHeroAsync() {
+  return (await getContentAsync()).hero;
+}
+
+export async function getHighlightArticleAsync(): Promise<Article | undefined> {
+  const content = await getContentAsync();
+  return content.articles.find((article) => article.slug === content.highlight);
+}
+
+export async function getFeaturedArticlesAsync(): Promise<Article[]> {
+  const content = await getContentAsync();
+  const bySlug = new Map(content.articles.map((article) => [article.slug, article]));
+  return content.featured
+    .map((slug) => bySlug.get(slug))
+    .filter((article: Article | undefined): article is Article => Boolean(article));
+}
+
+export async function getAllArticlesAsync(): Promise<Article[]> {
+  return (await getContentAsync()).articles;
+}
+
+export async function getArticleBySlugAsync(slug: string): Promise<Article | undefined> {
+  const normalised = slug.replace(/^\//, "");
+  return (await getContentAsync()).articles.find((article) => article.slug === normalised);
 }

@@ -2,17 +2,18 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ArticleCard } from "../components/article-card";
 import { RichContent } from "../components/rich-content";
-import { getAllArticles, getArticleBySlug } from "../lib/content";
+import { getAllArticlesAsync, getArticleBySlugAsync } from "../lib/content";
 
-export function generateStaticParams() {
-  return getAllArticles()
+export async function generateStaticParams() {
+  const articles = await getAllArticlesAsync();
+  return articles
     .filter((article) => article.slug.length > 0)
     .map((article) => ({ slug: article.slug.split("/") }));
 }
 
-export function generateMetadata({ params }: { params: { slug?: string[] } }): Metadata {
+export async function generateMetadata({ params }: { params: { slug?: string[] } }): Promise<Metadata> {
   const slugPath = params.slug?.join("/") ?? "";
-  const article = getArticleBySlug(slugPath);
+  const article = await getArticleBySlugAsync(slugPath);
   if (!article) {
     return {
       title: "Contenido no encontrado"
@@ -30,15 +31,15 @@ export function generateMetadata({ params }: { params: { slug?: string[] } }): M
   };
 }
 
-export default function ArticlePage({ params }: { params: { slug?: string[] } }) {
+export default async function ArticlePage({ params }: { params: { slug?: string[] } }) {
   const slugPath = params.slug?.join("/") ?? "";
-  const article = getArticleBySlug(slugPath);
+  const article = await getArticleBySlugAsync(slugPath);
 
   if (!article) {
     notFound();
   }
 
-  const related = getAllArticles().filter((entry) => entry.slug !== article.slug).slice(0, 3);
+  const related = (await getAllArticlesAsync()).filter((entry) => entry.slug !== article.slug).slice(0, 3);
 
   return (
     <div className="space-y-16">

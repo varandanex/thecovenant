@@ -13,6 +13,14 @@ const nextConfig = {
       }
     ]
   }
+  ,
+  // Reduce dev-server startup time by ignoring large artifact folders (images, exports)
+  // Next will skip watching these paths which otherwise slow down initial file-walk.
+  webpackDevMiddleware: {
+    watchOptions: {
+      ignored: ['**/data/**', '**/.git/**', '**/node_modules/**']
+    }
+  }
 };
 
 export default nextConfig;

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { Logo } from "./logo";
-import { getNavigation } from "../lib/content";
+import { getNavigationAsync } from "../lib/content";
 
-const navigation = getNavigation();
+export async function SiteHeader() {
+  const navigation = await getNavigationAsync();
 
-export function SiteHeader() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-background/80 backdrop-blur-xl">
       <div className="container-bleed flex h-20 items-center justify-between">

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { Logo } from "./logo";
-import { getNavigation } from "../lib/content";
+import { getNavigationAsync } from "../lib/content";
 
-const navigation = getNavigation();
+export async function SiteFooter() {
+  const navigation = await getNavigationAsync();
 
-export function SiteFooter() {
   return (
     <footer className="border-t border-white/5 bg-background/80 py-16 backdrop-blur-xl">
       <div className="container-bleed grid gap-12 md:grid-cols-[1.5fr_1fr]">

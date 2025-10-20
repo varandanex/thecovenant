@@ -1,8 +1,8 @@
-import { getAllArticles } from "../lib/content";
+import { getAllArticlesAsync } from "../lib/content";
 import { ArticleCard } from "../components/article-card";
 
-export function ArticlesMosaic() {
-  const articles = getAllArticles();
+export async function ArticlesMosaic() {
+  const articles = await getAllArticlesAsync();
   const grouped = articles.reduce<Record<string, typeof articles>>((acc, article) => {
     const key = article.category ?? "Archivo";
     acc[key] = acc[key] ?? [];

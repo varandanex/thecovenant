@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { getFeaturedArticles, getHero, getHighlightArticle } from "../lib/content";
+import { getFeaturedArticlesAsync, getHeroAsync, getHighlightArticleAsync } from "../lib/content";
 import { ArticleCard } from "../components/article-card";
 
-export function HeroSection() {
-  const hero = getHero();
-  const highlight = getHighlightArticle();
-  const featured = getFeaturedArticles().filter((article) => article.slug !== highlight?.slug);
+export async function HeroSection() {
+  const hero = await getHeroAsync();
+  const highlight = await getHighlightArticleAsync();
+  const featured = (await getFeaturedArticlesAsync()).filter((article) => article.slug !== highlight?.slug);
 
   return (
     <section className="grid gap-12 lg:grid-cols-[1.1fr_1fr]">

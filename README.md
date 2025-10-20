@@ -1,6 +1,6 @@
 # The Covenant – Next.js + Supabase Stack
 
-Proyecto moderno para relanzar www.thecovenant.es con un stack centrado en contenido, rapidez y control total sobre la experiencia editorial.
+Proyecto moderno para relanzar [www.thecovenant.es](https://www.thecovenant.es/) con un stack centrado en contenido, rapidez y control total sobre la experiencia editorial.
 
 ## Stack principal
 - **Next.js 14 (App Router)**: renderizado híbrido (SSG/ISR/SSR), manejo de rutas anidadas y soporte para acciones del servidor.
@@ -27,11 +27,21 @@ Proyecto moderno para relanzar www.thecovenant.es con un stack centrado en conte
 - **Automatización**: configurar webhooks de Supabase (o scripts administrativos) para disparar revalidaciones en la ruta `/api/revalidate` cuando se publique contenido.
 
 ## Recursos útiles
-- Documentación Next.js: https://nextjs.org/docs
-- Supabase docs: https://supabase.com/docs
-- shadcn/ui: https://ui.shadcn.com
-- Plantillas de formularios con react-hook-form + zod: https://ui.shadcn.com/docs/components/form
 
+## Nota: mejorar tiempos de arranque en desarrollo
+
+Si `npm run dev` tarda mucho en arrancar es probablemente por dos motivos comunes en este repo:
+
+- La app carga un export JSON grande (`data/thecovenant-export-formatted.json`) y/o Next/webpack inspecciona la carpeta `data/images/` con cientos de archivos. Eso provoca mucho file-walking y watchers que ralentizan el inicio.
+- Lecturas sincrónicas desde el filesystem durante el import (p.ej. `fs.readFileSync`) bloquean el proceso de servidor.
+
+Qué hicimos aquí y recomendaciones:
+
+- Evita que el dev server vigile carpetas de artefactos: en `next.config.mjs` incluimos `webpackDevMiddleware.watchOptions.ignored = ['**/data/**']`.
+- Carga datos pesados de forma asíncrona y bajo demanda (ahora `app/(site)/lib/content.ts` expone `get*Async()` que leen el JSON cuando se necesita desde server components).
+- Considera mover assets grandes a un host (CDN/Supabase Storage) o a `public/` y mantener `data/images/` fuera del árbol que Next vigila.
+
+Para medir: ejecuta `time npm run dev` antes y después de los cambios y compara. Si quieres, podemos automatizar una prueba simple que arranque Next y mida el tiempo de ready.
 > Este README se irá actualizando conforme se añadan módulos (CMS interno, editor rich text, despliegues automatizados, etc.).
 
 ## Herramientas de scraping y limpieza
