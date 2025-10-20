@@ -1,6 +1,5 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import prisma from "./prisma";
 import { parseDbArticle } from "./parse-db-article";
 import type {
   Article,
@@ -26,6 +25,17 @@ const LOCAL_EXPORT_PATHS = Array.from(
 
 let cachedContent: SiteContent | null = null;
 let loadedOnce = false;
+
+type PrismaInstance = typeof import("./prisma") extends { default: infer Client } ? Client : never;
+let prismaClient: PrismaInstance | null = null;
+
+async function getPrismaClient(): Promise<PrismaInstance> {
+  if (!prismaClient) {
+    const module = await import("./prisma");
+    prismaClient = module.default;
+  }
+  return prismaClient;
+}
 
 const contentSource = (process.env.CONTENT_SOURCE ?? "").toLowerCase();
 // Consideramos la URL de base de datos válida si respeta los protocolos soportados
@@ -55,6 +65,7 @@ const fallbackContent: SiteContent = {
     primary: [
       { label: "Crónicas", href: "/cronicas" },
       { label: "Experiencias", href: "/experiencias" },
+      { label: "Ranking", href: "/ranking-escape-rooms" },
       { label: "Noticias", href: "/noticias" },
       { label: "Podcast", href: "/podcast" }
     ],
@@ -315,6 +326,7 @@ function buildSiteContent(raw: any): SiteContent | null {
       : [
           { label: "Crónicas", href: "/cronicas" },
           { label: "Experiencias", href: "/experiencias" },
+          { label: "Ranking", href: "/ranking-escape-rooms" },
           { label: "Noticias", href: "/noticias" },
           { label: "Podcast", href: "/podcast" }
         ],
@@ -348,6 +360,8 @@ async function loadContentFromDatabase(): Promise<SiteContent | null> {
   }
 
   try {
+    const prisma = await getPrismaClient();
+
     const [settings, articles] = await Promise.all([
       prisma.siteSettings.findUnique({ where: { id: "default" } }),
       prisma.article.findMany({
@@ -402,7 +416,7 @@ async function loadContentFromDatabase(): Promise<SiteContent | null> {
       navigation.secondary = [...fallbackContent.navigation.secondary];
     }
 
-    const normalisedArticles: Article[] = articles.map((article) => parseDbArticle(article));
+    const normalisedArticles: Article[] = articles.map((article: (typeof articles)[number]) => parseDbArticle(article));
 
     if (normalisedArticles.length === 0) {
       return null;
