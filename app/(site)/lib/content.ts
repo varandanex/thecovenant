@@ -2,6 +2,19 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { Article, ContentSection, Navigation, SiteContent } from "./types";
 
+const EXPORT_FILENAME = "thecovenant-export-formatted.json";
+const CONTENT_EXPORT_URL = process.env.CONTENT_EXPORT_URL ?? process.env.NEXT_PUBLIC_CONTENT_EXPORT_URL ?? null;
+const CONTENT_EXPORT_BASE_URL =
+  process.env.CONTENT_EXPORT_BASE_URL ??
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+const LOCAL_EXPORT_PATHS = Array.from(
+  new Set(
+    [process.env.CONTENT_EXPORT_PATH, path.join(process.cwd(), "public", EXPORT_FILENAME), path.join(process.cwd(), "data", EXPORT_FILENAME)]
+      .filter((candidate): candidate is string => typeof candidate === "string" && candidate.length > 0)
+  )
+);
+
 let cachedContent: SiteContent | null = null;
 let loadedOnce = false;
 
@@ -86,64 +99,126 @@ function normaliseArticle(page: any): Article | null {
   };
 }
 
+async function loadExportFromUrl(url: string): Promise<any | null> {
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) {
+      console.warn(`No se pudo obtener el export externo (${response.status} ${response.statusText}).`);
+      return null;
+    }
+    return await response.json();
+  } catch (error) {
+    console.warn("Fallo al solicitar el export externo:", error);
+    return null;
+  }
+}
+
+async function loadExportFromFilesystem(): Promise<any | null> {
+  for (const candidate of LOCAL_EXPORT_PATHS) {
+    try {
+      const rawTxt = await fs.readFile(candidate, "utf-8");
+      return JSON.parse(rawTxt);
+    } catch (error: any) {
+      if (error?.code === "ENOENT") {
+        continue;
+      }
+      console.warn(`No se pudo leer el export desde ${candidate}:`, error);
+    }
+  }
+  return null;
+}
+
+function buildSiteContent(raw: any): SiteContent | null {
+  const pages = Array.isArray(raw?.pages) ? raw.pages : [];
+  const articles = pages
+    .map((page: any) => normaliseArticle(page))
+    .filter((article: Article | null): article is Article => Boolean(article?.slug));
+
+  if (articles.length === 0) {
+    return null;
+  }
+
+  const featured = Array.isArray(raw?.featuredSlugs)
+    ? raw.featuredSlugs
+    : articles.slice(0, 4).map((article: Article) => article.slug);
+  const highlight = typeof raw?.highlightSlug === "string" ? raw.highlightSlug : featured[0];
+
+  const navigation: Navigation = {
+    primary: Array.isArray(raw?.navigation?.primary)
+      ? raw.navigation.primary
+      : [
+          { label: "Crónicas", href: "/cronicas" },
+          { label: "Experiencias", href: "/experiencias" },
+          { label: "Noticias", href: "/noticias" },
+          { label: "Podcast", href: "/podcast" }
+        ],
+    secondary: Array.isArray(raw?.navigation?.secondary)
+      ? raw.navigation.secondary
+      : [
+          { label: "Newsletter", href: "/newsletter" },
+          { label: "Contacto", href: "/contacto" },
+          { label: "Colabora", href: "/colabora" }
+        ]
+  };
+
+  return {
+    hero: {
+      title: raw?.hero?.title ?? "Relatos ocultos, experiencias imposibles",
+      description:
+        raw?.hero?.description ??
+        "La hermandad de The Covenant recopila investigaciones, crónicas y proyectos de narrativa inmersiva.",
+      cta: raw?.hero?.cta ?? { label: "Explorar relatos", href: "/cronicas" }
+    },
+    highlight: highlight ?? articles[0].slug,
+    articles,
+    featured,
+    navigation
+  };
+}
+
 async function loadExternalContentAsync(): Promise<SiteContent | null> {
   try {
-    const filePath = path.join(process.cwd(), "data", "thecovenant-export-formatted.json");
-    try {
-      await fs.access(filePath);
-    } catch (err) {
+    const resolvedUrl = resolveExportUrl(CONTENT_EXPORT_URL);
+    const raw =
+      (resolvedUrl ? await loadExportFromUrl(resolvedUrl) : null) ?? (await loadExportFromFilesystem());
+
+    if (!raw) {
       return null;
     }
 
-    const rawTxt = await fs.readFile(filePath, "utf-8");
-    const raw = JSON.parse(rawTxt);
-    const pages = Array.isArray(raw?.pages) ? raw.pages : [];
-    const articles = pages
-      .map((page: any) => normaliseArticle(page))
-      .filter((article: Article | null): article is Article => Boolean(article?.slug));
-
-    if (articles.length === 0) {
-      return null;
-    }
-
-    const featured = Array.isArray(raw?.featuredSlugs)
-      ? raw.featuredSlugs
-      : articles.slice(0, 4).map((article: Article) => article.slug);
-    const highlight = typeof raw?.highlightSlug === "string" ? raw.highlightSlug : featured[0];
-
-    const navigation: Navigation = {
-      primary: Array.isArray(raw?.navigation?.primary)
-        ? raw.navigation.primary
-        : [
-            { label: "Crónicas", href: "/cronicas" },
-            { label: "Experiencias", href: "/experiencias" },
-            { label: "Noticias", href: "/noticias" },
-            { label: "Podcast", href: "/podcast" }
-          ],
-      secondary: Array.isArray(raw?.navigation?.secondary)
-        ? raw.navigation.secondary
-        : [
-            { label: "Newsletter", href: "/newsletter" },
-            { label: "Contacto", href: "/contacto" },
-            { label: "Colabora", href: "/colabora" }
-          ]
-    };
-
-    return {
-      hero: {
-        title: raw?.hero?.title ?? "Relatos ocultos, experiencias imposibles",
-        description:
-          raw?.hero?.description ??
-          "La hermandad de The Covenant recopila investigaciones, crónicas y proyectos de narrativa inmersiva." ,
-        cta: raw?.hero?.cta ?? { label: "Explorar relatos", href: "/cronicas" }
-      },
-      highlight: highlight ?? articles[0].slug,
-      articles,
-      featured,
-      navigation
-    };
+    return buildSiteContent(raw);
   } catch (error) {
     console.error("No se pudo cargar el export del scraper:", error);
+    return null;
+  }
+}
+
+function resolveExportUrl(url: string | null): string | null {
+  if (!url) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+
+  if (url.startsWith("/")) {
+    if (CONTENT_EXPORT_BASE_URL) {
+      try {
+        return new URL(url, CONTENT_EXPORT_BASE_URL).toString();
+      } catch (error) {
+        console.warn("No se pudo resolver CONTENT_EXPORT_URL relativo:", error);
+        return null;
+      }
+    }
+    console.warn("Define CONTENT_EXPORT_BASE_URL o NEXT_PUBLIC_SITE_URL para usar CONTENT_EXPORT_URL relativo.");
+    return null;
+  }
+
+  try {
+    return new URL(url).toString();
+  } catch (error) {
+    console.warn("CONTENT_EXPORT_URL no es una URL válida:", error);
     return null;
   }
 }

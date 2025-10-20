@@ -40,6 +40,7 @@ Qué hicimos aquí y recomendaciones:
 - Evita que el dev server vigile carpetas de artefactos: en `next.config.mjs` incluimos `webpackDevMiddleware.watchOptions.ignored = ['**/data/**']`.
 - Carga datos pesados de forma asíncrona y bajo demanda (ahora `app/(site)/lib/content.ts` expone `get*Async()` que leen el JSON cuando se necesita desde server components).
 - Considera mover assets grandes a un host (CDN/Supabase Storage) o a `public/` y mantener `data/images/` fuera del árbol que Next vigila.
+- El export formateado puede servirse desde fuera del árbol de Next. Define `CONTENT_EXPORT_URL` para que la app consuma el JSON vía `fetch` (por ejemplo, un bucket o `/api/content-export`), usa `CONTENT_EXPORT_BASE_URL` si proporcionas una ruta relativa y opcionalmente ajusta `CONTENT_EXPORT_PATH` para que el endpoint apunte a otra ruta local (como `public/thecovenant-export-formatted.json`). Usa `GET /api/content-export?refresh=1` si necesitas invalidar la caché en desarrollo sin reiniciar el servidor.
 
 Para medir: ejecuta `time npm run dev` antes y después de los cambios y compara. Si quieres, podemos automatizar una prueba simple que arranque Next y mida el tiempo de ready.
 > Este README se irá actualizando conforme se añadan módulos (CMS interno, editor rich text, despliegues automatizados, etc.).
