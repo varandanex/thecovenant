@@ -1,3 +1,6 @@
+import { parseDbArticle } from "./parse-db-article";
+import type { Article, EscapeRoomGeneralData, EscapeRoomScoring } from "./types";
+
 export type EscapeRoomRankingEntry = {
   id: string;
   name: string;
@@ -18,6 +21,26 @@ export type EscapeRoomRankingEntry = {
   url?: string;
   description: string;
 };
+
+type PrismaInstance = typeof import("./prisma") extends { default: infer Client } ? Client : never;
+let prismaClient: PrismaInstance | null = null;
+
+async function getPrismaClient(): Promise<PrismaInstance> {
+  if (!prismaClient) {
+    const module = await import("./prisma");
+    prismaClient = module.default;
+  }
+  return prismaClient;
+}
+
+const rawDbUrl = process.env.DATABASE_URL ?? "";
+const isValidDatabaseUrl = rawDbUrl.startsWith("file:") || rawDbUrl.startsWith("postgresql://") || rawDbUrl.startsWith("postgres://");
+const contentSource = (process.env.CONTENT_SOURCE ?? "").toLowerCase();
+const enableDbFlag = (process.env.ENABLE_DB ?? "").toLowerCase() === "true";
+const DATABASE_CONTENT_ENABLED =
+  (contentSource === "database" && isValidDatabaseUrl) ||
+  (enableDbFlag && isValidDatabaseUrl) ||
+  (contentSource !== "file" && process.env.USE_DATABASE_CONTENT === "true" && isValidDatabaseUrl);
 
 export const escapeRoomRanking: EscapeRoomRankingEntry[] = [
   {
@@ -273,6 +296,143 @@ export const escapeRoomRanking: EscapeRoomRankingEntry[] = [
       "Un laboratorio clandestino con capas de exploración, uso inteligente de la proyección y decisiones morales en el cierre."
   }
 ];
+
+/**
+ * Convierte un Article con datos de escape room a EscapeRoomRankingEntry.
+ */
+function articleToRankingEntry(article: Article): EscapeRoomRankingEntry | null {
+  const { escapeRoomGeneralData, escapeRoomScoring } = article;
+
+  if (!escapeRoomGeneralData || !escapeRoomScoring) {
+    return null;
+  }
+
+  // Extraer provincia desde generalData
+  const province = escapeRoomGeneralData.province ?? "No especificada";
+
+  // Extraer ciudad desde la categoría (ej: "Escape Room - Barcelona")
+  const city = article.category?.split(" - ").pop()?.trim() ?? province;
+
+  // Extraer el estudio desde el título (primera parte antes del guion)
+  const studioMatch = article.title.match(/^([^:]+?):/);
+  const studio = studioMatch ? studioMatch[1].trim() : "Desconocido";
+
+  // Extraer el nombre del escape room (segunda parte después del guion)
+  const nameMatch = article.title.match(/:\s*(.+)/);
+  const name = nameMatch ? nameMatch[1].trim() : article.title;
+
+  // Puntuación global
+  const rating = escapeRoomScoring.global?.ratio ? escapeRoomScoring.global.ratio * 10 : 0;
+
+  // Métricas individuales
+  const immersion = escapeRoomScoring.immersion?.ratio ? escapeRoomScoring.immersion.ratio * 10 : 0;
+  const puzzles = escapeRoomScoring.puzzles?.ratio ? escapeRoomScoring.puzzles.ratio * 10 : 0;
+  const narrative = escapeRoomScoring.fun?.ratio ? escapeRoomScoring.fun.ratio * 10 : 0; // Usamos 'fun' como narrativa
+  const intensity = escapeRoomScoring.terror?.ratio ? escapeRoomScoring.terror.ratio * 10 : 0;
+
+  // Dificultad
+  const difficultyRatio = escapeRoomScoring.difficulty?.ratio ?? 0;
+  let difficulty: "Baja" | "Media" | "Alta" = "Media";
+  if (difficultyRatio < 0.4) {
+    difficulty = "Baja";
+  } else if (difficultyRatio > 0.7) {
+    difficulty = "Alta";
+  }
+
+  // Duración
+  const durationMinutes = escapeRoomGeneralData.durationMinutes ?? 60;
+  const minPlayers = escapeRoomGeneralData.minPlayers ?? 2;
+  const maxPlayers = escapeRoomGeneralData.maxPlayers ?? 6;
+
+  // Tema (usamos la categoría completa o tags)
+  const theme = article.category ?? "Experiencia inmersiva";
+
+  // Tags
+  const tags = article.tags ?? [];
+
+  // URL
+  const url = escapeRoomGeneralData.webLink;
+
+  // Descripción
+  const description = article.description ?? article.excerpt ?? "Experiencia inmersiva única.";
+
+  return {
+    id: article.slug,
+    name,
+    city,
+    province,
+    studio,
+    rating,
+    immersion,
+    puzzles,
+    narrative,
+    intensity,
+    difficulty,
+    durationMinutes,
+    minPlayers,
+    maxPlayers,
+    theme,
+    tags,
+    url,
+    description
+  };
+}
+
+/**
+ * Carga el ranking de escape rooms desde la base de datos.
+ * Retorna null si no hay BD disponible o no hay artículos con datos de escape room.
+ */
+async function loadRankingFromDatabase(): Promise<EscapeRoomRankingEntry[] | null> {
+  if (!DATABASE_CONTENT_ENABLED) {
+    return null;
+  }
+
+  try {
+    const prisma = await getPrismaClient();
+
+    // Obtener todos los artículos que tengan escapeRoomScoring
+    const articles = await prisma.article.findMany({
+      where: {
+        escapeRoomScoring: {
+          not: null
+        }
+      },
+      orderBy: [
+        { publishedAt: "desc" },
+        { createdAt: "desc" }
+      ]
+    });
+
+    if (articles.length === 0) {
+      return null;
+    }
+
+    // Convertir los artículos de Prisma a Article y luego a EscapeRoomRankingEntry
+    const rankingEntries: EscapeRoomRankingEntry[] = articles
+      .map((article) => {
+        const parsedArticle = parseDbArticle(article);
+        return articleToRankingEntry(parsedArticle);
+      })
+      .filter((entry): entry is EscapeRoomRankingEntry => entry !== null);
+
+    // Ordenar por rating descendente
+    rankingEntries.sort((a, b) => b.rating - a.rating);
+
+    return rankingEntries.length > 0 ? rankingEntries : null;
+  } catch (error) {
+    console.warn("No se pudo cargar el ranking desde la base de datos:", error);
+    return null;
+  }
+}
+
+/**
+ * Obtiene el ranking de escape rooms. Primero intenta cargar desde la BD,
+ * si no está disponible usa el ranking hardcoded.
+ */
+export async function getEscapeRoomRanking(): Promise<EscapeRoomRankingEntry[]> {
+  const dbRanking = await loadRankingFromDatabase();
+  return dbRanking ?? escapeRoomRanking;
+}
 
 export function getRankingStats(entries: EscapeRoomRankingEntry[]) {
   const totalRooms = entries.length;

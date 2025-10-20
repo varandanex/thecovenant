@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { EscapeRoomRanking } from "../components/escape-room-ranking";
-import { escapeRoomRanking, getRankingStats } from "../lib/ranking-data";
+import { getEscapeRoomRanking, getRankingStats } from "../lib/ranking-data";
 
 export const metadata: Metadata = {
   title: "Ranking de escape rooms en España | The Covenant",
@@ -15,8 +15,8 @@ export const metadata: Metadata = {
   }
 };
 
-export default function RankingEscapeRoomsPage() {
-
+export default async function RankingEscapeRoomsPage() {
+  const escapeRoomRanking = await getEscapeRoomRanking();
   const stats = getRankingStats(escapeRoomRanking);
   const topThree = [...escapeRoomRanking].sort((a, b) => b.rating - a.rating).slice(0, 3);
 
